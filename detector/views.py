@@ -18,9 +18,55 @@ from google.oauth2 import service_account
 from googleapiclient.discovery import build
 import requests as customRequest
 from google.auth import transport,credentials
+import google_auth_oauthlib.flow
+from w3lib.url import url_query_parameter
 # Create your views here.
 class GoogleAuthVerify(APIView):
     
+    def auth(self,credential_code=""):
+        # id_info = id_token.verify_oauth2_token(credential, requests.Request(), '189496678458-qimsru4vsjae5tvfisn17gp7nh0v527k.apps.googleusercontent.com')
+        # print(id_info)
+        flow = google_auth_oauthlib.flow.Flow.from_client_secrets_file('client_credential.json',scopes=['https://www.googleapis.com/auth/drive.metadata.readonly'])
+        flow.redirect_uri = 'http://127.0.0.1'
+
+        # Generate URL for request to Google's OAuth 2.0 server.
+        # Use kwargs to set optional request parameters.
+        authorization_url, state = flow.authorization_url(
+        # Recommended, enable offline access so that you can refresh an access token without
+        # re-prompting the user for permission. Recommended for web server apps.
+        access_type='offline',
+        # Optional, enable incremental authorization. Recommended as a best practice.
+        include_granted_scopes='true',
+        prompt='consent')
+        # url = authorization_url
+        # print(authorization_url)
+        state=url_query_parameter(authorization_url, 'state')
+        print(state)
+        url_to_get_code=f"https://accounts.google.com/o/oauth2/auth?client_id=189496678458-lbsabcd97iss894bi6c5tjmnrv1e3vh8.apps.googleusercontent.com&redirect_uri=http://127.0.0.1&scope=https://www.googleapis.com/auth/gmail.readonly&email&response_type=code&include_granted_scopes=true&access_type=offline&state={state}"
+        print(url_to_get_code)
+        code_res=customRequest.get(url_to_get_code)
+        print(code_res.text)
+        # r=customRequest.post(f"https://accounts.google.com/o/oauth2/auth?client_id=189496678458-lbsabcd97iss894bi6c5tjmnrv1e3vh8.apps.googleusercontent.com&redirect_uri=http://127.0.0.1&scope=https://www.googleapis.com/auth/gmail.readonly&email&response_type=code&include_granted_scopes=true&access_type=offline&state={state}")
+        # print(r.text)
+        # token_url="https://accounts.google.com/o/oauth2/auth"
+        # payload = {
+        #         "grant_type": "authorization_code",
+        #         "client_id": "189496678458-lbsabcd97iss894bi6c5tjmnrv1e3vh8.apps.googleusercontent.com",
+        #         "client_secret": "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",
+        #         "redirect_uri": "http://127.0.0.1",
+        #         "code": credential_code ,
+        #         "scope":"https://www.googleapis.com/auth/gmail.readonly",
+        #         "include_granted_scopes":"true",
+        #         "access_type":"offline",
+        #         "state":state
+        # }
+        # headers = {"Content-Type": "application/x-www-form-urlencoded"}
+        # response = customRequest.post(token_url, data=payload, headers=headers)
+        # with open("temp.txt","w") as f:
+        #     f.write(response.text)
+        # # print(response.text)
+        # return response
+
     def auth_with_python(self):
         SCOPES = ["https://www.googleapis.com/auth/gmail.readonly"]
         creds = None
@@ -43,34 +89,34 @@ class GoogleAuthVerify(APIView):
                                 "token_uri": "https://oauth2.googleapis.com/token",
                                 "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
                                 "client_secret": "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",
-                                "redirect_uris": ["http://localhost:8001"],
+                                "redirect_uris": ["http://127.0.0.1:8000/api/google-auth-verify/"],
                                 "javascript_origins": ["http://localhost", "http://localhost:3000"]
                             }
                     }, SCOPES
                 )
-                creds = flow.run_local_server(port=8001)
+                creds = flow.run_local_server(port=0)
                 print("<><>",creds)
             # Save the credentials for the next run
             with open("token.json", "w") as token:
                 token.write(creds.to_json())
-        try:
-            service = build("gmail", "v1", credentials=creds)
-            # Call the Gmail v1 API
-            results = (
-                service.files()
-                .list(pageSize=10, fields="nextPageToken, files(id, name)")
-                .execute()
-            )
-            items = results.get("files", [])
-            if not items:
-                print("No files found.")
-                return
-            print("Files:")
-            for item in items:
-                print(f"{item['name']} ({item['id']})")
-        except HttpError as error:
-            # TODO(developer) - Handle errors from drive API.
-            print(f"An error occurred: {error}")
+        # try:
+        #     service = build("gmail", "v1", credentials=creds)
+        #     # Call the Gmail v1 API
+        #     results = (
+        #         service.files()
+        #         .list(pageSize=10, fields="nextPageToken, files(id, name)")
+        #         .execute()
+        #     )
+        #     items = results.get("files", [])
+        #     if not items:
+        #         print("No files found.")
+        #         return
+        #     print("Files:")
+        #     for item in items:
+        #         print(f"{item['name']} ({item['id']})")
+        # except HttpError as error:
+        #     # TODO(developer) - Handle errors from drive API.
+        #     print(f"An error occurred: {error}")
     def verify_auth(self,credential_token):
         
         id_info = id_token.verify_oauth2_token(credential_token, requests.Request(), '189496678458-qimsru4vsjae5tvfisn17gp7nh0v527k.apps.googleusercontent.com')
@@ -119,24 +165,41 @@ class GoogleAuthVerify(APIView):
         except Exception as e:
             print(f"Error {e}")
     def post(self,request):
+        print("called")
         try:
             # SCOPES = ["https://www.googleapis.com/auth/gmail.readonly"]
             data=request.body
             data_string = data.decode('utf-8')
             auth_credentials = json.loads(data_string)
-            print(credentials)
+            print(auth_credentials["code"])
             
             # In react if you have used GoogleLogin component then only
-            self.verify_auth(auth_credentials["credential"])
-
+            # self.verify_auth(auth_credentials["credential"])
+            # another way to redirect authorization url
+            res=self.auth("")
+            # return
             #In react if you have used useGoogleLogin hook 
             # token_url = "https://oauth2.googleapis.com/token"
+            # token_url="https://accounts.google.com/o/oauth2/auth"
             # payload = {
             #     "grant_type": "authorization_code",
             #     "client_id": "189496678458-qimsru4vsjae5tvfisn17gp7nh0v527k.apps.googleusercontent.com",
             #     "client_secret": "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",
-            #     "redirect_uri": "http://localhost:8000/api/google-auth-verify/",
+            #     "redirect_uri": "http://127.0.0.1:8000/api/google-auth-verify",
             #     "code": auth_credentials["code"] 
+            # }
+            # print('-----auth_credentials["code"]--------', auth_credentials["code"])
+            # return Response("login successfully",status=200)
+            # payload = {
+            #     "grant_type": "authorization_code",
+            #     "client_id": "189496678458-lbsabcd97iss894bi6c5tjmnrv1e3vh8.apps.googleusercontent.com",
+            #     "client_secret": "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",
+            #     "redirect_uri": "http://127.0.0.1",
+            #     "code": auth_credentials["code"] ,
+            #     "scope":"https://www.googleapis.com/auth/gmail.readonly",
+            #     "include_granted_scopes":"true",
+            #     "access_type":"offline",
+            #     "state":"Za1LLGyenbWEQ0o4oM4bOaLyDopOtw"
             # }
             # headers = {"Content-Type": "application/x-www-form-urlencoded"}
             # response = customRequest.post(token_url, data=payload, headers=headers)
@@ -146,7 +209,7 @@ class GoogleAuthVerify(APIView):
             # self.gmail_access_using_access_refresh_token()
             #auth with python
             # self.auth_with_python()
-            return Response("login successfully",status=200)
+            return Response("login",status=200)
             # pass
         except Exception as e:
             return Response(f"Error {e}",status=400)
