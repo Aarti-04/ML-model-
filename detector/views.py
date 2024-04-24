@@ -20,6 +20,7 @@ import requests as customRequest
 from google.auth import transport,credentials
 import google_auth_oauthlib.flow
 from w3lib.url import url_query_parameter
+import base64  
 # Create your views here.
 class GoogleAuthVerify(APIView):
     
@@ -164,6 +165,73 @@ class GoogleAuthVerify(APIView):
             print(messages)
         except Exception as e:
             print(f"Error {e}")
+    def get_body_content(self, parts):
+           for part in parts:
+               if part['mimeType'] == 'text/plain':
+                   data = part['body']['data']
+                   d=base64.urlsafe_b64decode(data).decode()
+                   return base64.urlsafe_b64decode(data).decode()
+               elif part['mimeType'] == 'multipart/mixed' or 'multipart/alternative':
+                   return self.get_body_content(part['parts'])
+           return ''
+    def get(self,request):
+        # code = request.GET.get('code1')
+        code =request.GET.get("code")
+        print("<>code<>",code)
+        url = "https://oauth2.googleapis.com/token"
+        payload = {
+            "grant_type": "authorization_code",
+            "client_id": "189496678458-lbsabcd97iss894bi6c5tjmnrv1e3vh8.apps.googleusercontent.com",
+            "client_secret": "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",
+            "redirect_uri":"http://127.0.0.1:8000/api/google-auth-verify",
+            "code": code
+        }
+
+        headers = {
+        'Content-Type': 'application/x-www-form-urlencoded'
+        }
+
+        response = customRequest.request("POST", url, headers=headers, data=payload)
+        # print(response.text)
+
+        credentials=json.loads(response.text)
+        credentials = Credentials(token=credentials["access_token"])
+        service = build('gmail', 'v1', credentials=credentials)
+        # print(service)
+        query = 'label:inbox'  # You can set search criteria here (e.g., 'label:unread')
+
+        # Get a list of message IDs
+        response = service.users().messages().list(userId='me', q=query).execute()
+        messages = response.get('messages', [])
+
+        # Process a limited number of messages
+        max_results = 10  # Adjust as needed
+        results = []
+
+        for i, message in enumerate(messages[:max_results]):
+            msg_id = message['id']
+
+            # Get the full message details
+            full_message = service.users().messages().get(userId='me', id=msg_id).execute()
+            # print("<>full message<>",full_message)
+
+            # Extract the body parts (handling potential errors)
+            try:
+                parts = full_message['payload']['parts']
+                # print("<>parts<>",parts)
+                body = self.get_body_content(parts)
+                results.append({'id': msg_id, 'body': body})
+            except (KeyError, HttpError) as e:
+                print(f"Error retrieving message {msg_id}: {e}")
+        
+        return Response(results)
+
+        # except Exception as e:
+        #     print(f"Error retrieving Gmail data: {e}")
+        #     return Response({'error': 'Failed to retrieve Gmail data'}, status=500)
+        # print("in viewwwwww")
+        # return Response("login",status=200)
+
     def post(self,request):
         print("called")
         try:
@@ -171,12 +239,41 @@ class GoogleAuthVerify(APIView):
             data=request.body
             data_string = data.decode('utf-8')
             auth_credentials = json.loads(data_string)
-            print(auth_credentials["code"])
+            # print(auth_credentials["code"])
             
+            url = "https://oauth2.googleapis.com/token"
+
+            payload = {
+                "grant_type": "authorization_code",
+                "client_id": "189496678458-lbsabcd97iss894bi6c5tjmnrv1e3vh8.apps.googleusercontent.com",
+                "client_secret": "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",
+                "redirect_uri": "http://127.0.0.1",
+                "code": "4/0AeaYSHD_1putU1S_wNFQQlJEs_QPzl8VmJbI5Woo6AX4qzp-EEl2eVYHIj5GsbFLGC7A-w"
+            }
+
+            headers = {
+            'Content-Type': 'application/x-www-form-urlencoded'
+            }
+
+            response = customRequest.request("POST", url, headers=headers, data=payload)
+            # print(response.text)
+
+            credentials=json.loads(response.text)
+            # credential=response.text
+            # print("========credential========",credentials)
+            # print("===credential[access_token]====",credentials["access_token"])
+            credentials = Credentials(token=credentials["access_token"])
+            print(credentials)
+            gmail_service = build('gmail', 'v1', credentials=credentials)
+            # print(gmail_service)
+
+
+
+
             # In react if you have used GoogleLogin component then only
             # self.verify_auth(auth_credentials["credential"])
             # another way to redirect authorization url
-            res=self.auth("")
+            # res=self.auth("")
             # return
             #In react if you have used useGoogleLogin hook 
             # token_url = "https://oauth2.googleapis.com/token"

@@ -84,7 +84,7 @@ payload = {
     "client_id": "189496678458-lbsabcd97iss894bi6c5tjmnrv1e3vh8.apps.googleusercontent.com",
     "client_secret": "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",
     "redirect_uri": "http://127.0.0.1",
-    "code": "4/0AeaYSHClt0jpuZA0kFHmGS4QCC7n_5CemgtDeR6M8vwVsDxq4C37u8mEObn0IKIXJSEm6Q"
+    "code": "4/0AeaYSHAJcBH5uEjqZ-w7FlN6BivcixlszzSCZMRAGeMaDDTOFCzfabpr-m0rEysZ38hiaA"
 }
 
 headers = {
@@ -92,7 +92,7 @@ headers = {
 }
 
 response = requests.request("POST", url, headers=headers, data=payload)
-# print(response.text)
+print(response.text)
 
 credentials=json.loads(response.text)
 # credential=response.text
