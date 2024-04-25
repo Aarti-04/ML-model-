@@ -90,9 +90,9 @@ WSGI_APPLICATION = "spam_detector.wsgi.application"
 DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.postgresql",
-        "NAME":  env('DATABASENAME'),
-        "USER":env("USER"),
-        "PASSWORD":env("PASSWORD"),
+        "NAME":  "db_blog",
+        "USER":"postgres",
+        "PASSWORD":"admin",
         "HOST":"localhost",
         "PORT": "5432"
     }

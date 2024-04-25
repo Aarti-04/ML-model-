@@ -20,74 +20,114 @@ import requests as customRequest
 from google.auth import transport,credentials
 import google_auth_oauthlib.flow
 from w3lib.url import url_query_parameter
-import base64  
+import base64 
+import re
+import nltk
+from nltk.corpus import stopwords
+from nltk.stem import WordNetLemmatizer 
+from dotenv import load_dotenv
+import nltk
+nltk.download('stopwords')
 # Create your views here.
+load_dotenv()
+
 class GoogleAuthVerify(APIView):
     
-    def auth(self,credential_code=""):
-        # id_info = id_token.verify_oauth2_token(credential, requests.Request(), '189496678458-qimsru4vsjae5tvfisn17gp7nh0v527k.apps.googleusercontent.com')
-        # print(id_info)
-        flow = google_auth_oauthlib.flow.Flow.from_client_secrets_file('client_credential.json',scopes=['https://www.googleapis.com/auth/drive.metadata.readonly'])
-        flow.redirect_uri = 'http://127.0.0.1'
+    def remove_html_tags(self,text):
+        """Removes HTML tags from the text."""
+        clean = re.sub(r'<.*?>', '', text)
+        return clean
 
-        # Generate URL for request to Google's OAuth 2.0 server.
-        # Use kwargs to set optional request parameters.
-        authorization_url, state = flow.authorization_url(
-        # Recommended, enable offline access so that you can refresh an access token without
-        # re-prompting the user for permission. Recommended for web server apps.
-        access_type='offline',
-        # Optional, enable incremental authorization. Recommended as a best practice.
-        include_granted_scopes='true',
-        prompt='consent')
-        # url = authorization_url
-        # print(authorization_url)
-        state=url_query_parameter(authorization_url, 'state')
-        print(state)
-        url_to_get_code=f"https://accounts.google.com/o/oauth2/auth?client_id=189496678458-lbsabcd97iss894bi6c5tjmnrv1e3vh8.apps.googleusercontent.com&redirect_uri=http://127.0.0.1&scope=https://www.googleapis.com/auth/gmail.readonly&email&response_type=code&include_granted_scopes=true&access_type=offline&state={state}"
-        print(url_to_get_code)
-        code_res=customRequest.get(url_to_get_code)
-        print(code_res.text)
-        # r=customRequest.post(f"https://accounts.google.com/o/oauth2/auth?client_id=189496678458-lbsabcd97iss894bi6c5tjmnrv1e3vh8.apps.googleusercontent.com&redirect_uri=http://127.0.0.1&scope=https://www.googleapis.com/auth/gmail.readonly&email&response_type=code&include_granted_scopes=true&access_type=offline&state={state}")
-        # print(r.text)
-        # token_url="https://accounts.google.com/o/oauth2/auth"
-        # payload = {
-        #         "grant_type": "authorization_code",
-        #         "client_id": "189496678458-lbsabcd97iss894bi6c5tjmnrv1e3vh8.apps.googleusercontent.com",
-        #         "client_secret": "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",
-        #         "redirect_uri": "http://127.0.0.1",
-        #         "code": credential_code ,
-        #         "scope":"https://www.googleapis.com/auth/gmail.readonly",
-        #         "include_granted_scopes":"true",
-        #         "access_type":"offline",
-        #         "state":state
-        # }
-        # headers = {"Content-Type": "application/x-www-form-urlencoded"}
-        # response = customRequest.post(token_url, data=payload, headers=headers)
-        # with open("temp.txt","w") as f:
-        #     f.write(response.text)
-        # # print(response.text)
-        # return response
+    def remove_punctuation(self,text):
+        """Removes punctuation characters from the text."""
+        clean = re.sub(r'[^\w\s]', '', text)
+        return clean
+
+    def lowercase_text(self,text):
+        """Converts the text to lowercase."""
+        return text.lower()
+
+    def remove_stopwords(self,text):
+        """Removes stopwords from the text."""
+        stop_words = stopwords.words('english')
+        clean = [word for word in text.split() if word not in stop_words]
+        return clean
+
+    def lemmatize_text(self,text):
+        """Lemmatizes words in the text."""
+        lemmatizer = WordNetLemmatizer()
+        clean = [lemmatizer.lemmatize(word) for word in text]
+        return clean
 
     def get_body_content(self, parts):
            for part in parts:
+            #    print("<>part<>",part)
                if part['mimeType'] == 'text/plain':
-                   data = part['body']['data']
-                   d=base64.urlsafe_b64decode(data).decode()
-                   return base64.urlsafe_b64decode(data).decode()
+                    data = part['body']['data']
+                    text=base64.urlsafe_b64decode(data).decode()
+                    text = self.remove_html_tags(text)
+                    text = self.remove_punctuation(text)
+                    text = self.lowercase_text(text)
+                    text = self.remove_stopwords(text)
+                    text = self.lemmatize_text(text)
+                    print("body.......")
+                    print(" ".join(text))
+                    return " ".join(text)
+                    return base64.urlsafe_b64decode(data).decode()
                elif part['mimeType'] == 'multipart/mixed' or 'multipart/alternative':
                    return self.get_body_content(part['parts'])
            return ''
-    def get_credentials():
+    def get_credentials(self,code):
         # Implement user authorization flow or environment variable retrieval here
         # Following lines are for illustrative purposes only (DO NOT USE DIRECTLY)
-        client_id = "YOUR_CLIENT_ID"
-        client_secret = "YOUR_CLIENT_SECRET"
-        return Credentials(token="YOUR_ACCESS_TOKEN")
+        client_id = os.getenv("client_id")
+        client_secret = os.getenv("client_secret")
+        url = "https://oauth2.googleapis.com/token"
+        payload = {
+            "grant_type": "authorization_code",
+            "client_id": client_id,
+            "client_secret": client_secret,
+            "redirect_uri":"http://127.0.0.1:8000/api/google-auth-verify",
+            "code": code
+        }
+        headers = {
+        'Content-Type': 'application/x-www-form-urlencoded'
+        }
+        response = customRequest.request("POST", url, headers=headers, data=payload)
+        print(response.text)
+        credentials=json.loads(response.text)
+        return Credentials(token=credentials["access_token"])
+    
+    def get_gmail_api_service(self):
+        credentials = self.get_credentials()
+        http = credentials.authorize(http())
+        return build('gmail', 'v1', http=http)
+
+    def read_subject_and_body(self,service, message_id):
+        try:
+            message = service.users().messages().get(userId='me', id=message_id).execute()
+            payload = message['payload']
+            headers = payload['headers']
+
+            # Extract subject
+            subject = None
+            for header in headers:
+                if header['name'] == 'Subject':
+                    subject = header['value']
+                    break
+
+            # Extract body
+            body = self.get_body_content(payload.get('parts', []))
+
+            return subject, body
+        except (KeyError, HttpError) as e:
+            print(f"Error retrieving message {message_id}: {e}")
+            return None, None
 
     def get(self,request):
         # code = request.GET.get('code1')
         code =request.GET.get("code")
-        print("<>code<>",code)
+        # self.get_credentials(code)
         url = "https://oauth2.googleapis.com/token"
         payload = {
             "grant_type": "authorization_code",
@@ -100,20 +140,22 @@ class GoogleAuthVerify(APIView):
         'Content-Type': 'application/x-www-form-urlencoded'
         }
         response = customRequest.request("POST", url, headers=headers, data=payload)
-        print(response.text)
+        # print(response.text)
 
         credentials=json.loads(response.text)
+        print(credentials)
         credentials = Credentials(token=credentials["access_token"])
+        print(credentials)
         service = build('gmail', 'v1', credentials=credentials)
-        # print(service)
-        query = 'label:inbox'  # You can set search criteria here (e.g., 'label:unread')
+        # print("<<<<<<service",service)
+        query = 'label:Sent'  # You can set search criteria here (e.g., 'label:unread')
 
         # Get a list of message IDs
         response = service.users().messages().list(userId='me', q=query).execute()
         messages = response.get('messages', [])
 
         # Process a limited number of messages
-        max_results = 10  # Adjust as needed
+        max_results = 2  # Adjust as needed
         results = []
 
         for i, message in enumerate(messages[:max_results]):
@@ -121,6 +163,15 @@ class GoogleAuthVerify(APIView):
 
             # Get the full message details
             full_message = service.users().messages().get(userId='me', id=msg_id).execute()
+            payload = full_message['payload']
+            headers = payload['headers']
+
+            # Extract subject
+            subject = None
+            for header in headers:
+                if header['name'] == 'Subject':
+                    subject = header['value'].rstrip()
+                    break           
             # print("<>full message<>",full_message)
 
             # Extract the body parts (handling potential errors)
@@ -128,7 +179,7 @@ class GoogleAuthVerify(APIView):
                 parts = full_message['payload']['parts']
                 # print("<>parts<>",parts)
                 body = self.get_body_content(parts)
-                results.append({'id': msg_id, 'body': body})
+                results.append({'id': msg_id, 'header':subject,'body': body})
             except (KeyError, HttpError) as e:
                 print(f"Error retrieving message {msg_id}: {e}")
         
