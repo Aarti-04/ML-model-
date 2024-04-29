@@ -55,9 +55,11 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    # "detector.middleware.TokenValidationMiddleware"
 ]
 
 ROOT_URLCONF = "spam_detector.urls"
+AUTH_USER_MODEL = "detector.CustomUser"
 
 TEMPLATES = [
     {
@@ -90,7 +92,7 @@ WSGI_APPLICATION = "spam_detector.wsgi.application"
 DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.postgresql",
-        "NAME":  "db_blog",
+        "NAME":  "db_spam_detector",
         "USER":"postgres",
         "PASSWORD":"admin",
         "HOST":"localhost",
@@ -137,9 +139,9 @@ USE_TZ = True
 
 
 STATIC_URL = "static/"
-STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
+# STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 # location of static files in local development
-STATICFILES_DIRS = [os.path.join(BASE_DIR, 'detector/static'),]
+# STATICFILES_DIRS = [os.path.join(BASE_DIR, 'detector/static'),]
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.0/ref/settings/#default-auto-field

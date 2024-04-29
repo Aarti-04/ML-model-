@@ -23,7 +23,7 @@ import google_auth_oauthlib.flow
 from w3lib.url import url_query_parameter
 import base64 
 import re
-import nltk
+# import nltk
 from nltk.corpus import stopwords
 from nltk.stem import WordNetLemmatizer 
 from dotenv import load_dotenv
@@ -31,9 +31,116 @@ import nltk
 import email
 from email import message_from_bytes
 from email.mime.text import MIMEText
-nltk.download('stopwords')
+import jwt
+import requests
+from rest_framework.serializers import ValidationError
+from .serializers import CustomeUserSerializer
+import random
+import string
+from django.contrib.auth.hashers import make_password
+from rest_framework.exceptions import ValidationError
+# nltk.download('stopwords')
 # Create your views here.
 load_dotenv()
+
+
+
+class RegisterAuthVerify(APIView):
+    def post(self, request):
+        data=request.body
+        data_string = data.decode('utf-8')
+        auth_credentials = json.loads(data_string)
+        print(auth_credentials)
+        user=self.get_decoded_data(auth_credentials["creds"]["id_token"])
+        print(user)
+        user_serializer=CustomeUserSerializer(data=user)
+        try:
+            user_serializer.is_valid(raise_exception=True)
+            user_serializer.save()
+            print("Registered sucessfully")
+            return Response("User Registered successfully ",status.HTTP_201_CREATED)
+        except Exception as e:
+            print("email is not valid")
+            return Response("This email is already registered", status=status.HTTP_400_BAD_REQUEST)
+       
+    def validate_token(self,id_token):
+        r = customRequest.get(
+            "https://www.googleapis.com/oauth2/v3/tokeninfo",
+            params={"id_token": id_token}
+        )
+        print("<>r<>",r)
+        r.raise_for_status()
+    def generate_random_password(self,email):
+        random_string = ''.join(random.choices(string.ascii_letters + string.digits, k=8))
+        password_base = email.split('@')[0] + random_string
+        return password_base
+    def get_decoded_data(self,id_token):
+        try:
+            self.validate_token(id_token)
+        except Exception:
+            error = {"message": "Google token invalid."}
+            raise ValidationError(error)
+        else:
+            data = jwt.decode(id_token, options={"verify_signature": False})
+            # print("<>data<>",data)
+            return {
+                "password": self.generate_random_password(data["email"]),
+                "email": data["email"],
+                "name": data.get("name")
+            }
+
+# views.py
+# from rest_framework.views import APIView
+# from rest_framework.response import Response
+# from .serializers import CustomeUserSerializer
+
+# class UserRegistrationView(APIView):
+#     def post(self, request):
+#         try:
+#             auth_credentials = request.data.get("creds")
+#             print("<>auth_credentials<>",auth_credentials)
+#             if auth_credentials:
+#                 id_token = auth_credentials.get("id_token")
+#                 if id_token:
+#                     user_data = self.get_decoded_data(id_token)
+#                     user_serializer = CustomeUserSerializer(data=user_data)
+#                     if user_serializer.is_valid():
+#                         user_serializer.save()
+#                         return Response("User Registered successfully", status=201)
+#                     else:
+#                         return Response(user_serializer.errors, status=400)
+#             return Response("Invalid request", status=400)
+#         except ValidationError as e:
+#             return Response("Error..........", status=400)
+
+#     def get_decoded_data(self, id_token):
+#         data = jwt.decode(id_token, options={"verify_signature": False})
+#         return {
+#             "password": self.generate_random_password(data["email"]),
+#             "email": data["email"],
+#             "name": data.get("name")
+#         }
+
+#     def generate_random_password(self, email):
+#         random_string = ''.join(random.choices(string.ascii_letters + string.digits, k=8))
+#         password_base = email.split('@')[0] + random_string
+#         return password_base
+
+
+
+
+# class LoginAuthVerify(APIView):
+#     def post(self,request):
+#         data=request.body
+#         data_string = data.decode('utf-8')
+#         auth_credentials = json.loads(data_string)
+#         # print(auth_credentials)
+#         print(auth_credentials["creds"])
+#         print(auth_credentials["creds"]["access_token"])
+#         id_info = id_token.verify_oauth2_token(auth_credentials["creds"]["id_token"], requests.Request(), '"189496678458-fpihrhl6pae85mhtq0tsra89cpguccja.apps.googleusercontent.com"')
+        
+#         print(id_info)
+#         return Response("loginsuccess",status=status.HTTP_200_OK)
 
 class GoogleAuthVerify(APIView):
     
@@ -242,7 +349,7 @@ class GoogleAuthVerify(APIView):
 
         # credentials=json.loads(response.text)
         # print("credential",credentials)
-        print(request.body)
+        # print(request.body)
         code =request.GET.get("code")
         data=request.body
         data_string = data.decode('utf-8')
@@ -258,9 +365,9 @@ class GoogleAuthVerify(APIView):
         # Get a list of message IDs
         response = service.users().messages().list(userId='me', q=query).execute()
         messages = response.get('messages', [])
-        print("<><>",messages)
+        # print("<><>",messages)
         # Process a limited number of messages
-        max_results = 20  # Adjust as needed
+        max_results = 10  # Adjust as needed
         results = []
 
         for i, message in enumerate(messages[:max_results]):
@@ -288,8 +395,6 @@ class GoogleAuthVerify(APIView):
                 results.append({'id': msg_id, 'header':subject,'body': body})
             except (KeyError, HttpError) as e:
                 print(f"Error retrieving message {msg_id}: {e}")
-        request.session["mail"]="aarti"
-        print(request.session["mail"])
         return Response(results)
 
 class MailOperation(APIView):
