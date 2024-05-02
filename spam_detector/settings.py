@@ -57,7 +57,15 @@ MIDDLEWARE = [
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     # "detector.middleware.TokenValidationMiddleware"
 ]
-
+AUTHENTICATION_BACKENDS=[
+    'detector.backends.CustomAuthBackend',
+    'django.contrib.auth.backends.ModelBackend'
+    ]
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': (
+        'rest_framework_simplejwt.authentication.JWTAuthentication',
+    ),
+}
 ROOT_URLCONF = "spam_detector.urls"
 AUTH_USER_MODEL = "detector.CustomUser"
 

@@ -38,3 +38,7 @@ class CustomeUserSerializer(serializers.ModelSerializer):
     class Meta:
         model=CustomUser
         fields="__all__"
+class TokenSerializer(serializers.ModelSerializer):
+    class Meta:
+        model=TokenModel
+        fields="__all__"

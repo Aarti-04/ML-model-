@@ -1,4 +1,5 @@
 from email import message
+from tokenize import TokenError
 from django.shortcuts import render
 from rest_framework.views import APIView,Response,status
 from django.shortcuts import render
@@ -57,7 +58,10 @@ from email.mime.multipart import MIMEMultipart
 import base64
 import json
 from google.oauth2.credentials import Credentials
-
+from .models import TokenModel,CustomUser
+from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework_simplejwt.views import TokenRefreshView
+from django.contrib.auth import authenticate,login,logout
 
 # from rest_framework.views import APIView, Response
 # from django.http import JsonResponse
@@ -87,21 +91,85 @@ from google.oauth2.credentials import Credentials
 # Create your views here.
 load_dotenv()
 
+class LoginUser(APIView):
+    def post(self,request):
+        data=request.body
+        user=request.user
+        print(user)
+        return Response("login")
+
+
+class Logout(APIView):
+    def delete(self,request):
+        pass
+        # user, created =CustomUser.objects.get(email=user_email)
+class RegisterWithToken(APIView):
+    def post(self,request):
+        authorization_code=request.body
+        data_string = authorization_code.decode('utf-8')
+        print(data_string)
+        # auth_credentials = json.loads(data_string)
+        # print(authorization_code)
+        # print(auth_credentials)
+        # return Response("hello")
+        # authorization_code = request.data.get('code')
+
+        # Google OAuth token endpoint
+        token_url = "https://oauth2.googleapis.com/token"
+
+        # Request parameters
+        token_data = {
+            'code': data_string,
+            'client_id': "189496678458-fpihrhl6pae85mhtq0tsra89cpguccja.apps.googleusercontent.com",
+            'client_secret': "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",
+            'redirect_uri': "http://127.0.0.1:8000",
+            'grant_type': 'authorization_code'
+        }
+
+        # Make request to Google OAuth token endpoint
+        response = customRequest.post(token_url, data=token_data,timeout=20)
+        print(response.text)
+        return Response("register")
 class RegisterAuthVerify(APIView):
+    def saveCredentials(self,user_email, refresh_token):
+        user, created =CustomUser.objects.get_or_create(email=user_email)
+        
+        # Get or create a TokenModel instance for the user
+        token_obj, _ = TokenModel.objects.get_or_create(userid=user)
+        # Update the TokenModel instance with the access and refresh tokens
+        token_obj.refresh_token = refresh_token
+        print("token object",token_obj)
+        token_obj.save()
+
     def post(self, request):
         data=request.body
         data_string = data.decode('utf-8')
         auth_credentials = json.loads(data_string)
-        print(auth_credentials)
-        user=self.get_decoded_data(auth_credentials["creds"]["id_token"])
+        print(auth_credentials["id_token"])
+        # return Response("hl")
+        user=self.get_decoded_data(auth_credentials["id_token"])
+        print(user)
+        try:
+            authenticatedUser=authenticate(request,**user)
+            print("authenticated user",authenticatedUser)
+            print("before login",request.user)
+            login(request,authenticatedUser)
+            print("after login",request.user)
+        except Exception as e:
+            print(str(e))
+       
+        # return Response("hello")
         print(user)
         user_serializer=CustomeUserSerializer(data=user)
         try:
             user_serializer.is_valid(raise_exception=True)
-            user_serializer.save()
+            obj=user_serializer.save()
+           
+            self.saveCredentials(user["email"],auth_credentials["refresh_token"])
             print("user_serializer",user_serializer)
+
             # login(request,user_serializer)
-            return Response("User Registered successfully ",status.HTTP_201_CREATED)
+            return Response("User Registered successfully",status.HTTP_201_CREATED)
         except Exception as e:
             print(f"64 Error {str(e)} ")
             return Response("Email already exist")
@@ -130,7 +198,6 @@ class RegisterAuthVerify(APIView):
                 "email": data["email"],
                 "name": data.get("name")
             }
-
 class GoogleAuthVerify(APIView):
     
     def read_mail_with_content(self,service, message_id):
@@ -273,23 +340,22 @@ class MailRead(APIView):
                 payload = full_message['payload']
                 headers = payload['headers']
                 subject = next((header['value'] for header in headers if header['name'] == 'Subject'), None)
+                date = next((header['value'] for header in headers if header['name'] == 'Date'), None)
                 print(subject)
                 parts = payload.get('parts', [])
                 body = self.get_body_content(parts)
                 # body = self.get_body_content(payload['parts'])
-                results.append({'id': msg_id, 'header': subject, 'body': body})
+                results.append({'id': msg_id, 'header': subject, 'body': body,"date":date})
                 
             return results
         except HttpError as e:
             print(f"Error fetching emails: {e}")
             return []
-    def post(self, request):
+    def get(self, request):
+        print(request)
         lable_query = request.GET.get("querylable")
-        data = request.body
-        data_string = data.decode('utf-8')
-        auth_credentials = json.loads(data_string)
-        access_token = auth_credentials["access_token"]
-
+        access_token = request.GET.get("access_token")
+        print(access_token)
         credentials = Credentials(token=access_token)
         service = build('gmail', 'v1', credentials=credentials)
         query = f'label:{lable_query}'
@@ -297,6 +363,22 @@ class MailRead(APIView):
         results = self.fetch_emails(service, query)
 
         return Response(results)
+class TokenRefresh(TokenRefreshView):
+    def post(self, request, *args, **kwargs):
+        data=request.data
+        print("327",data['refresh'])   
+        try:
+            serializer = self.get_serializer(data=request.data)
+            print("serializer",serializer)
+            serializer.is_valid(raise_exception=True)
+            refresh_token = serializer.validated_data.get('refresh')
+            print("hello",refresh_token)
+            # Create a new access token
+            access_token = RefreshToken(data['refresh'])
+            token = {'access': str(access_token.access_token)}
+            return Response(token)
+        except Exception as e:
+            return Response({'error': str(e)})
 class ComposeMail(APIView):
     def post(self, request):
         try:

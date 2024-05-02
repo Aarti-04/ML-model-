@@ -18,7 +18,7 @@ class CustomUser(AbstractUser):
 class TokenModel(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     userid=models.ForeignKey(CustomUser,on_delete=models.CASCADE)
-    access_token = models.TextField()
     refresh_token = models.TextField()
+    objects=models.Manager()
 
 # # Create your models here.
