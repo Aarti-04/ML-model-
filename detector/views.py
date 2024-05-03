@@ -27,7 +27,6 @@ import re
 # import nltk
 from nltk.corpus import stopwords
 from nltk.stem import WordNetLemmatizer 
-from dotenv import load_dotenv
 import nltk
 import email
 from email import message_from_bytes
@@ -89,7 +88,6 @@ from django.contrib.auth import authenticate,login,logout
 
 # nltk.download('stopwords')
 # Create your views here.
-load_dotenv()
 
 class LoginUser(APIView):
     def post(self,request):
@@ -122,7 +120,7 @@ class RegisterWithToken(APIView):
             'code': data_string,
             'client_id': "189496678458-fpihrhl6pae85mhtq0tsra89cpguccja.apps.googleusercontent.com",
             'client_secret': "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",
-            'redirect_uri': "http://127.0.0.1:8000",
+            'redirect_uri': "http://127.0.0.1:8000/",
             'grant_type': 'authorization_code'
         }
 
@@ -297,6 +295,7 @@ class GoogleAuthVerify(APIView):
             full_message = service.users().messages().get(userId='me', id=msg_id).execute()
             payload = full_message['payload']
             headers = payload['headers']
+            sender=payload['headers'][0]['value']
 
             # Extract subject
             subject = None
@@ -310,7 +309,7 @@ class GoogleAuthVerify(APIView):
                 parts = full_message['payload']['parts']
                 # print("<>parts<>",parts)
                 body = self.get_body_content(parts)
-                results.append({'id': msg_id, 'header':subject,'body': body})
+                results.append({'id': msg_id, 'header':subject,'body': body,'sender':sender})
             except (KeyError, HttpError) as e:
                 print(f"Error retrieving message {msg_id}: {e}")
         return Response(results)
@@ -328,7 +327,7 @@ class MailRead(APIView):
             elif part.get('mimeType') in ('multipart/mixed', 'multipart/alternative'):
                 return self.get_body_content(part.get('parts', []))
         return ''
-    def fetch_emails(self, service, query, max_results=10):
+    def fetch_emails(self, service, query, max_results=20):
         try:
             response = service.users().messages().list(userId='me', q=query).execute()
             messages = response.get('messages', [])
@@ -338,24 +337,26 @@ class MailRead(APIView):
                 msg_id = message['id']
                 full_message = service.users().messages().get(userId='me', id=msg_id).execute()
                 payload = full_message['payload']
+                print("payload",payload)
                 headers = payload['headers']
+                sender = next((header['value'] for header in headers if header['name'] == 'From'), None)
                 subject = next((header['value'] for header in headers if header['name'] == 'Subject'), None)
                 date = next((header['value'] for header in headers if header['name'] == 'Date'), None)
-                print(subject)
+                # print(subject)
                 parts = payload.get('parts', [])
                 body = self.get_body_content(parts)
                 # body = self.get_body_content(payload['parts'])
-                results.append({'id': msg_id, 'header': subject, 'body': body,"date":date})
+                results.append({'id': msg_id, 'header': subject, 'body': body,"date":date,'sender':sender})
                 
             return results
         except HttpError as e:
             print(f"Error fetching emails: {e}")
             return []
     def get(self, request):
-        print(request)
+        # print(request)
         lable_query = request.GET.get("querylable")
         access_token = request.GET.get("access_token")
-        print(access_token)
+        # print(access_token)
         credentials = Credentials(token=access_token)
         service = build('gmail', 'v1', credentials=credentials)
         query = f'label:{lable_query}'
