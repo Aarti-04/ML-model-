@@ -14,6 +14,7 @@ from googleapiclient.errors import HttpError
 from google.oauth2 import id_token
 from google.auth.transport import requests
 from google.auth.exceptions import GoogleAuthError
+from rest_framework.permissions import IsAuthenticated,IsAdminUser,AllowAny
 import googleapiclient.discovery
 from google.oauth2 import credentials
 from google.oauth2 import service_account
@@ -61,6 +62,7 @@ from .models import TokenModel,CustomUser
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenRefreshView
 from django.contrib.auth import authenticate,login,logout
+from rest_framework_simplejwt.tokens import RefreshToken, AccessToken
 
 # from rest_framework.views import APIView, Response
 # from django.http import JsonResponse
@@ -99,35 +101,117 @@ class LoginUser(APIView):
 
 class Logout(APIView):
     def delete(self,request):
-        pass
+        user=request.user
+        print(user)
+        return Response("logout")
         # user, created =CustomUser.objects.get(email=user_email)
-class RegisterWithToken(APIView):
+class GoogleRegisterView(APIView):
+    
+    def generate_random_password(self,email):
+        random_string = ''.join(random.choices(string.ascii_letters + string.digits, k=8))
+        password_base = email.split('@')[0] + random_string
+        return password_base
+    def saveCredentials(self,user_email, refresh_token):
+        user, created =CustomUser.objects.get_or_create(email=user_email)
+        
+        # Get or create a TokenModel instance for the user
+        token_obj, _ = TokenModel.objects.get_or_create(userid=user)
+        # Update the TokenModel instance with the access and refresh tokens
+        token_obj.refresh_token = refresh_token
+        print("token object",token_obj)
+        token_obj.save()
+    def get_auth_jwt_token(self,authenticatedUser):
+        access_token=AccessToken.for_user(authenticatedUser)
+        refresh_token=RefreshToken.for_user(authenticatedUser)
+        token={"access_token":str(access_token),"refresh_token":str(refresh_token)}
+        return token
     def post(self,request):
         authorization_code=request.body
+        print("authorization_code",authorization_code)
         data_string = authorization_code.decode('utf-8')
-        print(data_string)
-        # auth_credentials = json.loads(data_string)
-        # print(authorization_code)
-        # print(auth_credentials)
-        # return Response("hello")
-        # authorization_code = request.data.get('code')
+        token_info = json.loads(data_string)
+        # token_url = "https://oauth2.googleapis.com/token"
 
-        # Google OAuth token endpoint
-        token_url = "https://oauth2.googleapis.com/token"
+        # # Request parameters
+        # token_data = {
+        #     'code': data_string,
+        #     'client_id': "189496678458-fpihrhl6pae85mhtq0tsra89cpguccja.apps.googleusercontent.com",
+        #     'client_secret': "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",
+        #     'redirect_uri': "http://localhost:3000",
+        #     'grant_type': 'authorization_code'
+        # }
+        # # Make request to Google OAuth token endpoint
+        # response = customRequest.post(token_url, data=token_data,timeout=20)
+        # if response.status_code == 200:
+        #     token_info = response.json()
+        access_token = token_info.get('access_token')
+        refresh_token = token_info.get('refresh_token')  # Optional, depending on the scope
+        user_info_url = f"https://www.googleapis.com/oauth2/v1/userinfo?access_token={access_token}"
+        user_info_response = requests.get(user_info_url)
+        if user_info_response.status_code == 200:
+            user_info = user_info_response.json()
+            print(user_info)
+            user_password=self.generate_random_password(user_info["email"])
+            user={"email":user_info["email"],"password":user_password,"name":user_info["name"]}
+            
+            try:
+                user_serializer=CustomeUserSerializer(data=user)
+                user_serializer.is_valid(raise_exception=True)
+                obj=user_serializer.save()
+                self.saveCredentials(user["email"],refresh_token)
+                print("saved obj",obj)
+                authenticatedUser=authenticate(request,**user)
+                token=self.get_auth_jwt_token(authenticatedUser)
 
-        # Request parameters
-        token_data = {
-            'code': data_string,
-            'client_id': "189496678458-fpihrhl6pae85mhtq0tsra89cpguccja.apps.googleusercontent.com",
-            'client_secret': "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",
-            'redirect_uri': "http://127.0.0.1:8000/",
-            'grant_type': 'authorization_code'
-        }
+                # login(request,user_serializer)
+                return Response({"message":"User Registered successfully","access_token":token["access_token"],"refresh_token":token["refresh_token"]},status.HTTP_201_CREATED)
+            except ValidationError as e:
+                print(str(e))
+            except Exception as e:
+                print(f"64 Error {str(e)} ")
+                return Response("Email already exist",status=status.HTTP_400_BAD_REQUEST)
+        else:
+            return Response({'error': 'Failed to fetch user info from Google'}, status=status.HTTP_400_BAD_REQUEST)
+        # else:
+        #     return Response({'error': 'Failed to exchange authorization code for tokens'}, status=status.HTTP_400_BAD_REQUEST)
+# class GoogleRegisterView(APIView):
+#     def post(self, request):
+#         authorization_code=request.body
+#         data_string = authorization_code.decode('utf-8')
+#         access_token_response=customRequest.post("http://127.0.0.1:8000/api/tokenexchange/",data=data_string)
+#         # Use the access token to fetch user information from Google API
+#         print(access_token_response.text)
 
-        # Make request to Google OAuth token endpoint
-        response = customRequest.post(token_url, data=token_data,timeout=20)
-        print(response.text)
-        return Response("register")
+#         return Response("registered")
+#         user_info_url = f"https://www.googleapis.com/oauth2/v1/userinfo?access_token={access_token}"
+#         user_info_response = requests.get(user_info_url)
+
+#         if user_info_response.status_code == 200:
+#             user_info = user_info_response.json()
+#             # Process user info and create/register the user in your application
+#             # For example, create a new user account using user_info['email'] as the email
+#             # Return success response
+#             return Response({'message': 'User registered successfully'}, status=status.HTTP_201_CREATED)
+#         else:
+#             return Response({'error': 'Failed to fetch user info from Google'}, status=status.HTTP_400_BAD_REQUEST)
+class GoogleLoginView(APIView):
+    def post(self, request):
+        access_token = request.data.get('access_token')
+
+        # Use the access token to fetch user information from Google API
+        user_info_url = f"https://www.googleapis.com/oauth2/v1/userinfo?access_token={access_token}"
+        user_info_response = requests.get(user_info_url)
+
+        if user_info_response.status_code == 200:
+            user_info = user_info_response.json()
+            # Process user info and perform login operation in your application
+            # For example, authenticate the user based on their Google ID or email
+            # Once authenticated, generate a JWT token or session for the user
+            # Return the token or session in the response
+            return Response({'token': 'generated_token'}, status=status.HTTP_200_OK)
+        else:
+            return Response({'error': 'Failed to fetch user info from Google'}, status=status.HTTP_400_BAD_REQUEST)
+
 class RegisterAuthVerify(APIView):
     def saveCredentials(self,user_email, refresh_token):
         user, created =CustomUser.objects.get_or_create(email=user_email)
@@ -314,6 +398,7 @@ class GoogleAuthVerify(APIView):
                 print(f"Error retrieving message {msg_id}: {e}")
         return Response(results)
 class MailRead(APIView):
+    permission_classes=[IsAuthenticated]
     def get_body_content(self, parts):
         if not parts:
             return ''
@@ -337,7 +422,7 @@ class MailRead(APIView):
                 msg_id = message['id']
                 full_message = service.users().messages().get(userId='me', id=msg_id).execute()
                 payload = full_message['payload']
-                print("payload",payload)
+                # print("payload",payload)
                 headers = payload['headers']
                 sender = next((header['value'] for header in headers if header['name'] == 'From'), None)
                 subject = next((header['value'] for header in headers if header['name'] == 'Subject'), None)
@@ -354,16 +439,21 @@ class MailRead(APIView):
             return []
     def get(self, request):
         # print(request)
-        lable_query = request.GET.get("querylable")
-        access_token = request.GET.get("access_token")
-        # print(access_token)
-        credentials = Credentials(token=access_token)
-        service = build('gmail', 'v1', credentials=credentials)
-        query = f'label:{lable_query}'
+        try:
+            lable_query = request.GET.get("querylable")
+            access_token = request.GET.get("access_token")
+            print(access_token)
+            print(lable_query)
+            credentials = Credentials(token=access_token)
+            service = build('gmail', 'v1', credentials=credentials)
+            query = f'label:{lable_query}'
 
-        results = self.fetch_emails(service, query)
+            results = self.fetch_emails(service, query)
 
-        return Response(results)
+            return Response(results)
+        except Exception as e:
+            print("Error........",str(e))
+            return Response(f"Error ${str(e)}")
 class TokenRefresh(TokenRefreshView):
     def post(self, request, *args, **kwargs):
         data=request.data

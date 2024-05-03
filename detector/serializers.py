@@ -31,14 +31,8 @@ class CustomeUserSerializer(serializers.ModelSerializer):
         if password:
             user.set_password(password)
             print("saved")
-            user.save()
-        else:
-            print("not saved")
-        return user 
+        user.save()
+        return user
     class Meta:
         model=CustomUser
-        fields="__all__"
-class TokenSerializer(serializers.ModelSerializer):
-    class Meta:
-        model=TokenModel
         fields="__all__"
