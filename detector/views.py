@@ -130,20 +130,6 @@ class GoogleRegisterView(APIView):
         print("authorization_code",authorization_code)
         data_string = authorization_code.decode('utf-8')
         token_info = json.loads(data_string)
-        # token_url = "https://oauth2.googleapis.com/token"
-
-        # # Request parameters
-        # token_data = {
-        #     'code': data_string,
-        #     'client_id': "189496678458-fpihrhl6pae85mhtq0tsra89cpguccja.apps.googleusercontent.com",
-        #     'client_secret': "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",
-        #     'redirect_uri': "http://localhost:3000",
-        #     'grant_type': 'authorization_code'
-        # }
-        # # Make request to Google OAuth token endpoint
-        # response = customRequest.post(token_url, data=token_data,timeout=20)
-        # if response.status_code == 200:
-        #     token_info = response.json()
         access_token = token_info.get('access_token')
         refresh_token = token_info.get('refresh_token')  # Optional, depending on the scope
         user_info_url = f"https://www.googleapis.com/oauth2/v1/userinfo?access_token={access_token}"
@@ -153,7 +139,6 @@ class GoogleRegisterView(APIView):
             print(user_info)
             user_password=self.generate_random_password(user_info["email"])
             user={"email":user_info["email"],"password":user_password,"name":user_info["name"]}
-            
             try:
                 user_serializer=CustomeUserSerializer(data=user)
                 user_serializer.is_valid(raise_exception=True)
@@ -161,19 +146,22 @@ class GoogleRegisterView(APIView):
                 self.saveCredentials(user["email"],refresh_token)
                 print("saved obj",obj)
                 authenticatedUser=authenticate(request,**user)
-                token=self.get_auth_jwt_token(authenticatedUser)
-
-                # login(request,user_serializer)
+                # login(request,obj)
+                token=self.get_auth_jwt_token(obj)
+                login(request,authenticatedUser)
                 return Response({"message":"User Registered successfully","access_token":token["access_token"],"refresh_token":token["refresh_token"]},status.HTTP_201_CREATED)
             except ValidationError as e:
                 print(str(e))
+                authenticatedUser=authenticate(request,**user)
+                login(request,authenticatedUser)
+                token=self.get_auth_jwt_token(authenticatedUser)
+                # login(request,user_serializer)
+                return Response({"message":"User Logged in successfully","access_token":token["access_token"],"refresh_token":token["refresh_token"]},status.HTTP_201_CREATED)
             except Exception as e:
                 print(f"64 Error {str(e)} ")
-                return Response("Email already exist",status=status.HTTP_400_BAD_REQUEST)
+                return Response(f"Error {str(e)}",status=status.HTTP_400_BAD_REQUEST)
         else:
             return Response({'error': 'Failed to fetch user info from Google'}, status=status.HTTP_400_BAD_REQUEST)
-        # else:
-        #     return Response({'error': 'Failed to exchange authorization code for tokens'}, status=status.HTTP_400_BAD_REQUEST)
 # class GoogleRegisterView(APIView):
 #     def post(self, request):
 #         authorization_code=request.body
