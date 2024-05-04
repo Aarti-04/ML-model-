@@ -12,6 +12,8 @@ https://docs.djangoproject.com/en/5.0/ref/settings/
 from datetime import timedelta
 from pathlib import Path
 import os
+from dotenv import load_dotenv
+load_dotenv()
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -134,12 +136,19 @@ WSGI_APPLICATION = "spam_detector.wsgi.application"
 #         "NAME": BASE_DIR / "db.sqlite3",
 #     }
 # }
+print( "db",os.environ.get("DBNAME"))
+print("username",os.environ.get("USER"))
+print("username",os.environ.get("CLIENT_SECRET"))
+print("username",os.environ.get("CLIENT_ID"))
+print("tokenuseri",os.environ.get("ToKEN_URI"))
+
+
 DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.postgresql",
-        "NAME":  "db_spam_detector",
-        "USER":"postgres",
-        "PASSWORD":"admin",
+        "NAME":os.environ.get("DBNAME") ,
+        "USER":os.environ.get("USER"),
+        "PASSWORD":os.environ.get("PASSWORD"),
         "HOST":"localhost",
         "PORT": "5432"
     }
