@@ -6,6 +6,7 @@ from django.shortcuts import render
 from django.http import JsonResponse
 import pickle
 import os
+from dotenv import load_dotenv
 import json
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
@@ -15,6 +16,7 @@ from google.oauth2 import id_token
 from google.auth.transport import requests
 from google.auth.exceptions import GoogleAuthError
 from rest_framework.permissions import IsAuthenticated,IsAdminUser,AllowAny
+from rest_framework import permissions
 import googleapiclient.discovery
 from google.oauth2 import credentials
 from google.oauth2 import service_account
@@ -63,6 +65,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenRefreshView
 from django.contrib.auth import authenticate,login,logout
 from rest_framework_simplejwt.tokens import RefreshToken, AccessToken
+load_dotenv()
 
 # from rest_framework.views import APIView, Response
 # from django.http import JsonResponse
@@ -90,7 +93,6 @@ from rest_framework_simplejwt.tokens import RefreshToken, AccessToken
 
 # nltk.download('stopwords')
 # Create your views here.
-
 class LoginUser(APIView):
     def post(self,request):
         data=request.body
@@ -429,21 +431,34 @@ class MailRead(APIView):
             return []
     def get(self, request):
         # print(request)
-        try:
             lable_query = request.GET.get("querylable")
             access_token = request.GET.get("access_token")
+            refresh_token = request.GET.get("refresh_token")
             print(access_token)
             print(lable_query)
-            credentials = Credentials(token=access_token)
+            print(refresh_token)
+            # credentials = Credentials(token=access_token)
+            # credentials["refresh_token"]=refresh_token
+            CLIENT_SECRET=os.environ.get("CLIENT_SECRET")
+            CLIENT_ID=os.environ.get("CLIENT_ID")
+            access_token = request.GET.get("access_token")
+            credentials = Credentials(token=access_token,token_uri=os.environ.get("ToKEN_URI"), refresh_token=refresh_token, client_id=CLIENT_ID, client_secret=CLIENT_SECRET)
+        
+            # Check if the access token is expired
+            if credentials.expired:
+                # Refresh the access token
+                request = requests.Request()
+                credentials.refresh(request)
             service = build('gmail', 'v1', credentials=credentials)
             query = f'label:{lable_query}'
-
             results = self.fetch_emails(service, query)
-
             return Response(results)
-        except Exception as e:
-            print("Error........",str(e))
-            return Response(f"Error ${str(e)}")
+    def handle_exception(self, exc):
+        # Override the default exception handler to return custom response for unauthenticated users
+        if isinstance(exc, permissions.IsAuthenticated):
+            print("called error")
+            return Response({"error": "You are not authenticated."}, status=status.HTTP_401_UNAUTHORIZED)
+        return super().handle_exception(exc)
 class TokenRefresh(TokenRefreshView):
     def post(self, request, *args, **kwargs):
         data=request.data
@@ -466,8 +481,8 @@ class ComposeMail(APIView):
             data = request.body
             data_string = data.decode('utf-8')
             credentials = json.loads(data_string)
-            credentials["client_secret"]="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"
-            credentials["client_id"]="189496678458-fpihrhl6pae85mhtq0tsra89cpguccja.apps.googleusercontent.com"
+            credentials["client_secret"]=os.environ.get("CLIENT_SECRET")
+            credentials["client_id"]=os.environ.get("CLIENT_ID")
 
             # Initialize credentials using access token
             creds = Credentials(token=credentials["access_token"])
