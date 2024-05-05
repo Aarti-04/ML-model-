@@ -141,14 +141,18 @@ print("username",os.environ.get("USER"))
 print("username",os.environ.get("CLIENT_SECRET"))
 print("username",os.environ.get("CLIENT_ID"))
 print("tokenuseri",os.environ.get("ToKEN_URI"))
+print("user",os.environ.get("USERNAME1"))
+print("passs",os.environ.get("PASSWORD1"))
+
+
 
 
 DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.postgresql",
         "NAME":os.environ.get("DBNAME") ,
-        "USER":os.environ.get("USER"),
-        "PASSWORD":os.environ.get("PASSWORD"),
+        "USER":os.environ.get("USERNAME1"),
+        "PASSWORD":os.environ.get("PASSWORD1"),
         "HOST":"localhost",
         "PORT": "5432"
     }

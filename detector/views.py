@@ -98,7 +98,7 @@ class LoginUser(APIView):
         data=request.body
         user=request.user
         print(user)
-        return Response("login")
+        return Response("logout")
 
 
 class Logout(APIView):
@@ -402,7 +402,7 @@ class MailRead(APIView):
             elif part.get('mimeType') in ('multipart/mixed', 'multipart/alternative'):
                 return self.get_body_content(part.get('parts', []))
         return ''
-    def fetch_emails(self, service, query, max_results=20):
+    def fetch_emails(self, service, query, max_results=30):
         try:
             response = service.users().messages().list(userId='me', q=query).execute()
             messages = response.get('messages', [])
@@ -420,11 +420,21 @@ class MailRead(APIView):
                 # print(subject)
                 parts = payload.get('parts', [])
                 body = self.get_body_content(parts)
+                print("Body in mail read",body)
+                # body_without_link=self.remove_links_and_whitespace(body)
+                # print("body_without_link",body_without_link)
                 predict_response = customRequest.post('http://127.0.0.1:8000/api/predict/',body)
+                print("predict_response",predict_response.text)
                 prediction_data = predict_response.json()
-                print(predict_response)
+                print("prediction_data",prediction_data["prediction"])
+                spamOrNot=""
+                if(prediction_data["prediction"]=="spam"):
+                    spamOrNot=True
+                else:
+                    spamOrNot=False
+                
                 # body = self.get_body_content(payload['parts'])
-                results.append({'id': msg_id, 'header': subject, 'body': body,"date":date,'sender':sender,"spam_predict":prediction_data})       
+                results.append({'id': msg_id, 'header': subject, 'body': body,"date":date,'sender':sender,"spam":spamOrNot})       
             return results
         except HttpError as e:
             print(f"Error fetching emails: {e}")
@@ -434,9 +444,13 @@ class MailRead(APIView):
             lable_query = request.GET.get("querylable")
             access_token = request.GET.get("access_token")
             refresh_token = request.GET.get("refresh_token")
-            print(access_token)
-            print(lable_query)
-            print(refresh_token)
+            # msg_limit = request.GET.get("message_limit")|10
+            
+            print("access_token",access_token)
+            print("lable query",lable_query)
+            print("refresh token",refresh_token)
+            # print("msg_limit ",msg_limit)
+            
             # credentials = Credentials(token=access_token)
             # credentials["refresh_token"]=refresh_token
             CLIENT_SECRET=os.environ.get("CLIENT_SECRET")
@@ -522,27 +536,45 @@ class ComposeMail(APIView):
             print(f"An error occurred: {e}")
             return Response({"error": "Failed to create mail draft"})
 class Predict(APIView):
+    def preprocess_email_body(self,body):
+        print("pre body",body)
+        # Remove URLs
+        body = re.sub(r'http[s]?://\S+', '', body)
+        # Remove email addresses
+        body = re.sub(r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b', '', body)
+        # Remove special characters and digits
+        body = re.sub(r'[^a-zA-Z\s]', '', body)
+        # Convert to lowercase
+        body = body.lower()
+        print("preprocessed body",body)
+        return body
+
+
     def post(self,request):
         data = request.body
+        print(data)
         # Decode the bytes to a string
-        data_string = data.decode('utf-8')
-
-        # Parse the string as JSON
-        data_json = json.loads(data_string)
-        message=data_json["message"]
-        # Print the JSON object
+        message = data.decode('utf-8')
         print(message)
+        # Parse the string as JSON
+        # data_json = json.loads(data_string)
+        # print("data_json",data_json)
+        # return Response({"prediction":"spam"})
+        # message=data_json["message"]
+        # Print the JSON object
+        # print(message)
         # Load the saved model and vectorizer
+        cleaned_body = self.preprocess_email_body(message)
         model_path = os.path.join(os.path.dirname(__file__), 'spam_detector_model.pkl')
         vectorizer_path = os.path.join(os.path.dirname(__file__), 'count_vectorizer.pkl')
         with open(model_path, 'rb') as model_file:
             clf = pickle.load(model_file)
-            print(clf)
+            # print(clf)
         with open(vectorizer_path, 'rb') as vectorizer_file:
             count_vectorizer = pickle.load(vectorizer_file)
-            print(count_vectorizer)
+            # print(count_vectorizer)
         # Make a prediction
-        message_vector = count_vectorizer.transform([message])
+        message_vector = count_vectorizer.transform([cleaned_body])
         prediction = clf.predict(message_vector)
  
         return Response({'prediction': prediction[0]},status=status.HTTP_200_OK)
