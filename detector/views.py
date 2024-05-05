@@ -418,9 +418,11 @@ class MailRead(APIView):
                 # print(subject)
                 parts = payload.get('parts', [])
                 body = self.get_body_content(parts)
+                predict_response = customRequest.post('http://127.0.0.1:8000/api/predict/',body)
+                prediction_data = predict_response.json()
+                print(predict_response)
                 # body = self.get_body_content(payload['parts'])
-                results.append({'id': msg_id, 'header': subject, 'body': body,"date":date,'sender':sender})
-                
+                results.append({'id': msg_id, 'header': subject, 'body': body,"date":date,'sender':sender,"spam_predict":prediction_data})       
             return results
         except HttpError as e:
             print(f"Error fetching emails: {e}")
