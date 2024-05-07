@@ -14,25 +14,25 @@ class TokenSerializer(serializers.ModelSerializer):
         model=TokenModel
         fields="__all__"
 class CustomeUserSerializer(serializers.ModelSerializer):
-    password = serializers.CharField(write_only=True)
-    def validate_password(self,value):
-        validate_password(value)
-        print("value",value)
-        return value
+    # password = serializers.CharField(write_only=True)
+    # def validate_password(self,value):
+    #     validate_password(value)
+    #     print("value",value)
+    #     return value
     def validate(self, data):
         email = data.get('email')
         if CustomUser.objects.filter(email=email).exists():
             raise serializers.ValidationError("This email is already registered.")
         return data
-    def create(self, validated_data):
-        password = validated_data.pop('password', None)
-        user = super().create(validated_data)
-        print("user",user)
-        if password:
-            user.set_password(password)
-            print("saved")
-        user.save()
-        return user
+    # def create(self, validated_data):
+    #     password = validated_data.pop('password', None)
+    #     user = super().create(validated_data)
+    #     print("user",user)
+    #     if password:
+    #         user.set_password(password)
+    #         print("saved")
+    #     user.save()
+    #     return user
     class Meta:
         model=CustomUser
-        fields="__all__"
+        exclude=["password"]

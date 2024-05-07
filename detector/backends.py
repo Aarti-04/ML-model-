@@ -9,15 +9,11 @@ class CustomAuthBackend(BaseBackend):
     def authenticate(self, request,password=None,email=None,**args):
         print("in CustomAuthBackend")
         user = CustomUser.objects.filter(email=email).first()
-        
         print(user)
         if user is None:
             return None
-        return user
-        # print(user.email)
-        # print(user.password)
-        # print(password)
-        # if user.check_password(password):
-        #     return user
-        # else:
-        #     print("in else")
+        if user.check_password(password):
+            return user
+        else:
+            print("in else")
+            return None

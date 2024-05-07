@@ -157,7 +157,12 @@ DATABASES = {
         "PORT": "5432"
     }
 }
-
+EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+EMAIL_HOST = 'smtp.gmail.com'  # Your SMTP server
+EMAIL_PORT = 587  # Port of your SMTP server
+EMAIL_HOST_USER = 'sharma.aarti.dcs24@vnsgu.ac.in'  # Your email address
+EMAIL_HOST_PASSWORD = 'wxga lmez pwok xbbh'  # Your email password
+EMAIL_USE_TLS = True  # Use TLS (Transport Layer Security)
 
 # LOGIN_REDIRECT_URL = "http://localhost:8000/api/google-auth-verify/"
 SESSION_COOKIE_AGE = 3600

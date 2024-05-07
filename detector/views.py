@@ -65,6 +65,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenRefreshView
 from django.contrib.auth import authenticate,login,logout
 from rest_framework_simplejwt.tokens import RefreshToken, AccessToken
+
 load_dotenv()
 
 # from rest_framework.views import APIView, Response
@@ -113,13 +114,16 @@ class GoogleRegisterView(APIView):
         random_string = ''.join(random.choices(string.ascii_letters + string.digits, k=8))
         password_base = email.split('@')[0] + random_string
         return password_base
-    def saveCredentials(self,user_email, refresh_token):
+    def saveCredentials(self,user_email="", google_access_token="",google_refresh_token="",jwt_refresh_token=""):
         user, created =CustomUser.objects.get_or_create(email=user_email)
         
         # Get or create a TokenModel instance for the user
         token_obj, _ = TokenModel.objects.get_or_create(userid=user)
+        
         # Update the TokenModel instance with the access and refresh tokens
-        token_obj.refresh_token = refresh_token
+        token_obj.jwt_refresh_token=jwt_refresh_token
+        token_obj.google_access_token=google_access_token
+        token_obj.google_refresh_token = google_refresh_token
         print("token object",token_obj)
         token_obj.save()
     def get_auth_jwt_token(self,authenticatedUser):
@@ -132,26 +136,26 @@ class GoogleRegisterView(APIView):
         print("authorization_code",authorization_code)
         data_string = authorization_code.decode('utf-8')
         token_info = json.loads(data_string)
-        access_token = token_info.get('access_token')
-        refresh_token = token_info.get('refresh_token')  # Optional, depending on the scope
-        user_info_url = f"https://www.googleapis.com/oauth2/v1/userinfo?access_token={access_token}"
+        google_access_token = token_info.get('access_token')
+        google_refresh_token = token_info.get('refresh_token')  # Optional, depending on the scope
+        user_info_url = f"https://www.googleapis.com/oauth2/v1/userinfo?access_token={google_access_token}"
         user_info_response = requests.get(user_info_url)
         if user_info_response.status_code == 200:
             user_info = user_info_response.json()
             print(user_info)
-            user_password=self.generate_random_password(user_info["email"])
-            user={"email":user_info["email"],"password":user_password,"name":user_info["name"]}
+            # user_password=self.generate_random_password(user_info["email"])
+            user={"email":user_info["email"],"name":user_info["name"]}
             try:
                 user_serializer=CustomeUserSerializer(data=user)
                 user_serializer.is_valid(raise_exception=True)
                 obj=user_serializer.save()
-                self.saveCredentials(user["email"],refresh_token)
-                print("saved obj",obj)
                 authenticatedUser=authenticate(request,**user)
                 # login(request,obj)
-                token=self.get_auth_jwt_token(obj)
+                jwt_token=self.get_auth_jwt_token(obj)
                 login(request,authenticatedUser)
-                return Response({"message":"User Registered successfully","access_token":token["access_token"],"refresh_token":token["refresh_token"]},status.HTTP_201_CREATED)
+                self.saveCredentials(user["email"],google_access_token=google_access_token,google_refresh_token=google_refresh_token,jwt_refresh_token=jwt_token["refresh_token"])
+                print("saved obj",obj)
+                return Response({"message":"User Registered successfully","access_token":jwt_token["access_token"],"refresh_token":jwt_token["refresh_token"]},status.HTTP_201_CREATED)
             except ValidationError as e:
                 print(str(e))
                 authenticatedUser=authenticate(request,**user)
@@ -164,30 +168,33 @@ class GoogleRegisterView(APIView):
                 return Response(f"Error {str(e)}",status=status.HTTP_400_BAD_REQUEST)
         else:
             return Response({'error': 'Failed to fetch user info from Google'}, status=status.HTTP_400_BAD_REQUEST)
-# class GoogleRegisterView(APIView):
-#     def post(self, request):
-#         authorization_code=request.body
-#         data_string = authorization_code.decode('utf-8')
-#         access_token_response=customRequest.post("http://127.0.0.1:8000/api/tokenexchange/",data=data_string)
-#         # Use the access token to fetch user information from Google API
-#         print(access_token_response.text)
-
-#         return Response("registered")
-#         user_info_url = f"https://www.googleapis.com/oauth2/v1/userinfo?access_token={access_token}"
-#         user_info_response = requests.get(user_info_url)
-
-#         if user_info_response.status_code == 200:
-#             user_info = user_info_response.json()
-#             # Process user info and create/register the user in your application
-#             # For example, create a new user account using user_info['email'] as the email
-#             # Return success response
-#             return Response({'message': 'User registered successfully'}, status=status.HTTP_201_CREATED)
-#         else:
-#             return Response({'error': 'Failed to fetch user info from Google'}, status=status.HTTP_400_BAD_REQUEST)
 class GoogleLoginView(APIView):
     def post(self, request):
-        access_token = request.data.get('access_token')
 
+        # access_token = request.data.get('access_token')
+        data=request.body
+        data=data.decode('utf-8')
+        login_data=json.loads(data)
+        print(login_data)
+        print(type(login_data))
+        authenticate_user=authenticate(request,email=login_data["email"],password=login_data["password"])
+        print(authenticate_user)
+        user=CustomUser.objects.get(email=login_data["email"])
+        if(user):
+            if(user.check_password(login_data["password"])):
+                print("user found")
+            else:
+                print("password not matched")
+        else:
+            print("user not found")
+        return Response("hello")
+        print(TokenModel.objects.get(userid=request.user.id))
+        User_Token_cred=TokenModel.objects.get(userid=request.user.id)
+        if(User_Token_cred):
+            access_token=User_Token_cred.google_access_token
+            refresh_token=User_Token_cred.google_refresh_token
+        else:
+            return Response("Please login with google")
         # Use the access token to fetch user information from Google API
         user_info_url = f"https://www.googleapis.com/oauth2/v1/userinfo?access_token={access_token}"
         user_info_response = requests.get(user_info_url)
@@ -202,191 +209,6 @@ class GoogleLoginView(APIView):
         else:
             return Response({'error': 'Failed to fetch user info from Google'}, status=status.HTTP_400_BAD_REQUEST)
 
-class RegisterAuthVerify(APIView):
-    def saveCredentials(self,user_email, refresh_token):
-        user, created =CustomUser.objects.get_or_create(email=user_email)
-        
-        # Get or create a TokenModel instance for the user
-        token_obj, _ = TokenModel.objects.get_or_create(userid=user)
-        # Update the TokenModel instance with the access and refresh tokens
-        token_obj.refresh_token = refresh_token
-        print("token object",token_obj)
-        token_obj.save()
-
-    def post(self, request):
-        data=request.body
-        data_string = data.decode('utf-8')
-        auth_credentials = json.loads(data_string)
-        print(auth_credentials["id_token"])
-        # return Response("hl")
-        user=self.get_decoded_data(auth_credentials["id_token"])
-        print(user)
-        try:
-            authenticatedUser=authenticate(request,**user)
-            print("authenticated user",authenticatedUser)
-            print("before login",request.user)
-            login(request,authenticatedUser)
-            print("after login",request.user)
-        except Exception as e:
-            print(str(e))
-       
-        # return Response("hello")
-        print(user)
-        user_serializer=CustomeUserSerializer(data=user)
-        try:
-            user_serializer.is_valid(raise_exception=True)
-            obj=user_serializer.save()
-           
-            self.saveCredentials(user["email"],auth_credentials["refresh_token"])
-            print("user_serializer",user_serializer)
-
-            # login(request,user_serializer)
-            return Response("User Registered successfully",status.HTTP_201_CREATED)
-        except Exception as e:
-            print(f"64 Error {str(e)} ")
-            return Response("Email already exist")
-            # raise ValidationError(str(e))
-    def validate_token(self,id_token):
-        r = customRequest.get(
-            "https://www.googleapis.com/oauth2/v3/tokeninfo",
-            params={"id_token": id_token}
-        )
-        r.raise_for_status()
-    def generate_random_password(self,email):
-        random_string = ''.join(random.choices(string.ascii_letters + string.digits, k=8))
-        password_base = email.split('@')[0] + random_string
-        return password_base
-    def get_decoded_data(self,id_token):
-        try:
-            self.validate_token(id_token)
-        except Exception:
-            error = {"message": "Google token invalid."}
-            raise ValidationError(error)
-        else:
-            data = jwt.decode(id_token, options={"verify_signature": False})
-            # print("<>data<>",data)
-            return {
-                "password": self.generate_random_password(data["email"]),
-                "email": data["email"],
-                "name": data.get("name")
-            }
-class GoogleAuthVerify(APIView):
-    
-    def read_mail_with_content(self,service, message_id):
-        try:
-            print("called read_mail_with_content")
-            message_raw = service.users().messages().get(userId="me", id=message_id).execute()
-            raw_data = base64.urlsafe_b64decode(message_raw["raw"].encode()).decode()
-
-            # Parse the raw email data
-            message = message_from_bytes(raw_data)
-
-            # Extract relevant information
-            subject = message.get("Subject")
-            sender = message.get("From")
-            print("<>subject<>",subject)
-            print("<>sender<>",sender)
-            body = self.get_body_content(message.walk())
-
-            # Format text for display (optional)
-            # ... (you can implement your formatting logic here)
-            
-            print(body)
-            return subject, sender, body
-        except (KeyError, HttpError) as e:
-            print(f"Error retrieving message {message_id}: {e}")
-            return None, None, None
-
-    def remove_html_tags(self,text):
-        """Removes HTML tags from the text."""
-        clean = re.sub(r'<.*?>', '', text)
-        return clean
-
-    def remove_punctuation(self,text):
-        """Removes punctuation characters from the text."""
-        clean = re.sub(r'[^\w\s]', '', text)
-        return clean
-
-    def lowercase_text(self,text):
-        """Converts the text to lowercase."""
-        return text.lower()
-
-    def remove_stopwords(self,text):
-        """Removes stopwords from the text."""
-        stop_words = stopwords.words('english')
-        clean = [word for word in text.split() if word not in stop_words]
-        return clean
-
-    def lemmatize_text(self,text):
-        """Lemmatizes words in the text."""
-        lemmatizer = WordNetLemmatizer()
-        clean = [lemmatizer.lemmatize(word) for word in text]
-        return clean
-      # text=base64.urlsafe_b64decode(data).decode()
-                    # text = self.remove_html_tags(text)
-                    # text = self.remove_punctuation(text)
-                    # text = self.lowercase_text(text)
-                    # text = self.remove_stopwords(text)
-                    # text = self.lemmatize_text(text)
-                    # print("body.......")
-                    # print(" ".join(text))
-                    # return " ".join(text)
-
-    def get_body_content(self,parts):
-           for part in parts:
-            #    print("<>part<>",part)
-               if part['mimeType'] == 'text/plain':
-                    data = part['body']['data']
-                    return base64.urlsafe_b64decode(data).decode()
-               elif part['mimeType'] == 'multipart/mixed' or 'multipart/alternative':
-                   return self.get_body_content(part['parts'])
-           return '' 
-    def post(self,request):
-        lable_query =request.GET.get("querylable")
-        print(lable_query)
-        data=request.body
-        data_string = data.decode('utf-8')
-        auth_credentials = json.loads(data_string)
-        print(auth_credentials["access_token"])
-        # return Response("login")
-        credentials = Credentials(token=auth_credentials["access_token"])
-        # print("credential......",credentials)
-        service = build('gmail', 'v1', credentials=credentials)
-        query = f'label:{lable_query}'  # You can set search criteria here (e.g., 'label:unread')
-
-        # Get a list of message IDs
-        response = service.users().messages().list(userId='me', q=query).execute()
-        messages = response.get('messages', [])
-        max_results = 10  # Adjust as needed
-        results = []
-
-        for i, message in enumerate(messages[:max_results]):
-            msg_id = message['id']
-            # self.read_mail_with_content(service,msg_id)
-
-
-            # Get the full message details
-            full_message = service.users().messages().get(userId='me', id=msg_id).execute()
-            payload = full_message['payload']
-            headers = payload['headers']
-            sender=payload['headers'][0]['value']
-
-            # Extract subject
-            subject = None
-            for header in headers:
-                if header['name'] == 'Subject':
-                    subject = header['value'].rstrip()
-                    break           
-
-            # Extract the body parts
-            try:
-                parts = full_message['payload']['parts']
-                # print("<>parts<>",parts)
-                body = self.get_body_content(parts)
-                results.append({'id': msg_id, 'header':subject,'body': body,'sender':sender})
-            except (KeyError, HttpError) as e:
-                print(f"Error retrieving message {msg_id}: {e}")
-        return Response(results)
 class MailRead(APIView):
     permission_classes=[IsAuthenticated]
     def get_body_content(self, parts):
@@ -402,7 +224,7 @@ class MailRead(APIView):
             elif part.get('mimeType') in ('multipart/mixed', 'multipart/alternative'):
                 return self.get_body_content(part.get('parts', []))
         return ''
-    def fetch_emails(self, service, query, max_results=30):
+    def fetch_emails(self, service, query, max_results=2):
         try:
             response = service.users().messages().list(userId='me', q=query).execute()
             messages = response.get('messages', [])
@@ -420,13 +242,13 @@ class MailRead(APIView):
                 # print(subject)
                 parts = payload.get('parts', [])
                 body = self.get_body_content(parts)
-                print("Body in mail read",body)
+                # print("Body in mail read",body)
                 # body_without_link=self.remove_links_and_whitespace(body)
                 # print("body_without_link",body_without_link)
                 predict_response = customRequest.post('http://127.0.0.1:8000/api/predict/',body)
-                print("predict_response",predict_response.text)
+                # print("predict_response",predict_response.text)
                 prediction_data = predict_response.json()
-                print("prediction_data",prediction_data["prediction"])
+                # print("prediction_data",prediction_data["prediction"])
                 spamOrNot=""
                 if(prediction_data["prediction"]=="spam"):
                     spamOrNot=True
@@ -440,32 +262,30 @@ class MailRead(APIView):
             print(f"Error fetching emails: {e}")
             return []
     def get(self, request):
-        # print(request)
+            print(request.user)
             lable_query = request.GET.get("querylable")
-            access_token = request.GET.get("access_token")
-            refresh_token = request.GET.get("refresh_token")
-            # msg_limit = request.GET.get("message_limit")|10
-            
-            print("access_token",access_token)
+            message_limit=request.GET.get("msglimit")
+            print(TokenModel.objects.get(userid=request.user.id))
+            User_Token_cred=TokenModel.objects.get(userid=request.user.id)
+            if(User_Token_cred):
+                access_token=User_Token_cred.google_access_token
+                refresh_token=User_Token_cred.google_refresh_token
+            else:
+                return Response("Please login with google")
             print("lable query",lable_query)
-            print("refresh token",refresh_token)
-            # print("msg_limit ",msg_limit)
-            
-            # credentials = Credentials(token=access_token)
-            # credentials["refresh_token"]=refresh_token
             CLIENT_SECRET=os.environ.get("CLIENT_SECRET")
             CLIENT_ID=os.environ.get("CLIENT_ID")
             access_token = request.GET.get("access_token")
             credentials = Credentials(token=access_token,token_uri=os.environ.get("ToKEN_URI"), refresh_token=refresh_token, client_id=CLIENT_ID, client_secret=CLIENT_SECRET)
-        
-            # Check if the access token is expired
+            # Check if the credentials is expired
             if credentials.expired:
-                # Refresh the access token
+                # Refresh the token
+                print("token got refresh")
                 request = requests.Request()
-                credentials.refresh(request)
+                credentials.refresh(request)   
             service = build('gmail', 'v1', credentials=credentials)
             query = f'label:{lable_query}'
-            results = self.fetch_emails(service, query)
+            results = self.fetch_emails(service, query,max_results=int(message_limit))
             return Response(results)
     def handle_exception(self, exc):
         # Override the default exception handler to return custom response for unauthenticated users
@@ -537,7 +357,7 @@ class ComposeMail(APIView):
             return Response({"error": "Failed to create mail draft"})
 class Predict(APIView):
     def preprocess_email_body(self,body):
-        print("pre body",body)
+        # print("pre body",body)
         # Remove URLs
         body = re.sub(r'http[s]?://\S+', '', body)
         # Remove email addresses
@@ -546,25 +366,19 @@ class Predict(APIView):
         body = re.sub(r'[^a-zA-Z\s]', '', body)
         # Convert to lowercase
         body = body.lower()
-        print("preprocessed body",body)
+        # print("processed body",body)
         return body
 
 
     def post(self,request):
         data = request.body
-        print(data)
+        # print(data)
         # Decode the bytes to a string
         message = data.decode('utf-8')
-        print(message)
-        # Parse the string as JSON
-        # data_json = json.loads(data_string)
-        # print("data_json",data_json)
-        # return Response({"prediction":"spam"})
-        # message=data_json["message"]
-        # Print the JSON object
         # print(message)
-        # Load the saved model and vectorizer
+        #preprocess data
         cleaned_body = self.preprocess_email_body(message)
+        # Load the saved model and vectorizer     
         model_path = os.path.join(os.path.dirname(__file__), 'spam_detector_model.pkl')
         vectorizer_path = os.path.join(os.path.dirname(__file__), 'count_vectorizer.pkl')
         with open(model_path, 'rb') as model_file:
@@ -573,8 +387,7 @@ class Predict(APIView):
         with open(vectorizer_path, 'rb') as vectorizer_file:
             count_vectorizer = pickle.load(vectorizer_file)
             # print(count_vectorizer)
-        # Make a prediction
         message_vector = count_vectorizer.transform([cleaned_body])
+         # Make a prediction
         prediction = clf.predict(message_vector)
- 
         return Response({'prediction': prediction[0]},status=status.HTTP_200_OK)
