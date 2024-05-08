@@ -18,7 +18,7 @@ def send_welcome_email(sender, instance, created, **kwargs):
             instance.set_password(password)
             instance.save()
             subject = 'Welcome to Our Website!'
-            message = f'Thank you for registering on our website. We hope you enjoy your experience! \n Your Registered password is ${password}'
+            message = f'Thank you for registering on our website. We hope you enjoy your experience! \n Your Registered password is {password}'
             from_email = settings.EMAIL_HOST_USER
             to_email = [instance.email]
             send_mail(subject, message, from_email, to_email)

@@ -36,11 +36,10 @@ class CustomUserManager(BaseUserManager):
             raise ValueError(_("Superuser must have is_superuser=True."))
         return self.create_user(email, password, **extra_fields)
 
-# class TokenManager(models.Manager):
-#     def save_credentials(self,user,access_token,refresh_token):
-#         user_credentials=self.model(userid=user,access_token=access_token,refresh_token=refresh_token)
-#         user_credentials.save()
-#         return user_credentials
+class TokenManager(models.Manager):
+    def update_jwt_token(self,access_token):
+        user_credentials=self.model(jwt_access_token=access_token)
+        return user_credentials.save()
 
 
 
