@@ -57,7 +57,7 @@ MIDDLEWARE = [
     # "detector.middleware.TokenValidationMiddleware"
 ]
 AUTHENTICATION_BACKENDS=[
-    'detector.backends.CustomAuthBackend',
+    # 'detector.backends.CustomAuthBackend',
     'django.contrib.auth.backends.ModelBackend'
     ]
 REST_FRAMEWORK = {

@@ -9,6 +9,7 @@ from django.utils.encoding import smart_str,force_bytes,DjangoUnicodeDecodeError
 from django.contrib.auth.tokens import PasswordResetTokenGenerator
 from django.utils.http import urlsafe_base64_decode,urlsafe_base64_encode
 from django.contrib.auth.password_validation import validate_password
+
 class TokenSerializer(serializers.ModelSerializer):
     class Meta:
         model=TokenModel
@@ -36,3 +37,12 @@ class CustomeUserSerializer(serializers.ModelSerializer):
     class Meta:
         model=CustomUser
         exclude=["password"]
+
+
+class EmailSerializer(serializers.Serializer):
+    id = serializers.CharField()
+    header = serializers.CharField()
+    body = serializers.CharField()
+    date = serializers.CharField()
+    sender = serializers.CharField()
+    spam = serializers.BooleanField()

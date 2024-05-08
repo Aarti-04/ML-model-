@@ -37,7 +37,8 @@ from email.mime.text import MIMEText
 import jwt
 import requests
 from rest_framework.serializers import ValidationError
-from .serializers import CustomeUserSerializer
+from rest_framework.pagination import PageNumberPagination
+from .serializers import CustomeUserSerializer,EmailSerializer
 import random
 import string
 from django.contrib.auth.hashers import make_password
@@ -65,7 +66,8 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenRefreshView
 from django.contrib.auth import authenticate,login,logout
 from rest_framework_simplejwt.tokens import RefreshToken, AccessToken
-
+from rest_framework.response import Response
+from .pagination import MyPaginator
 load_dotenv()
 
 # from rest_framework.views import APIView, Response
@@ -108,6 +110,11 @@ class Logout(APIView):
         print(user)
         return Response("logout")
         # user, created =CustomUser.objects.get(email=user_email)
+def get_auth_jwt_token(authenticatedUser):
+        access_token=AccessToken.for_user(authenticatedUser)
+        refresh_token=RefreshToken.for_user(authenticatedUser)
+        token={"access_token":str(access_token),"refresh_token":str(refresh_token)}
+        return token
 class GoogleRegisterView(APIView):
     
     def generate_random_password(self,email):
@@ -126,11 +133,6 @@ class GoogleRegisterView(APIView):
         token_obj.google_refresh_token = google_refresh_token
         print("token object",token_obj)
         token_obj.save()
-    def get_auth_jwt_token(self,authenticatedUser):
-        access_token=AccessToken.for_user(authenticatedUser)
-        refresh_token=RefreshToken.for_user(authenticatedUser)
-        token={"access_token":str(access_token),"refresh_token":str(refresh_token)}
-        return token
     def post(self,request):
         authorization_code=request.body
         print("authorization_code",authorization_code)
@@ -148,21 +150,30 @@ class GoogleRegisterView(APIView):
             try:
                 user_serializer=CustomeUserSerializer(data=user)
                 user_serializer.is_valid(raise_exception=True)
-                obj=user_serializer.save()
-                authenticatedUser=authenticate(request,**user)
-                # login(request,obj)
-                jwt_token=self.get_auth_jwt_token(obj)
-                login(request,authenticatedUser)
+                authenticatedUser=user_serializer.save()
+                print("obj",authenticatedUser)
+                jwt_token=get_auth_jwt_token(authenticatedUser)
                 self.saveCredentials(user["email"],google_access_token=google_access_token,google_refresh_token=google_refresh_token,jwt_refresh_token=jwt_token["refresh_token"])
-                print("saved obj",obj)
+                login(request,authenticatedUser)
+                print("logged in user",authenticatedUser)
                 return Response({"message":"User Registered successfully","access_token":jwt_token["access_token"],"refresh_token":jwt_token["refresh_token"]},status.HTTP_201_CREATED)
             except ValidationError as e:
                 print(str(e))
-                authenticatedUser=authenticate(request,**user)
+                google_access_token = token_info.get('access_token')
+                google_refresh_token = token_info.get('refresh_token')
+                authenticatedUser=CustomUser.objects.get(email=user["email"])
+                User_Token_cred=TokenModel.objects.get(userid=authenticatedUser)
+                User_Token_cred.google_access_token=google_access_token
+                User_Token_cred.google_refresh_token=google_refresh_token
+                jwt_refresh_token=User_Token_cred.jwt_refresh_token
+                access_token_response=customRequest.post("http://127.0.0.1:8000/api/refreshtoken/",data=jwt_refresh_token,timeout=20)
+                jwt_access_token=access_token_response.json()
+                print("jwt_access_token",jwt_access_token)
+                print("jwt_refresh_token",jwt_refresh_token)
+                res=User_Token_cred.save()
+                print(res)
                 login(request,authenticatedUser)
-                token=self.get_auth_jwt_token(authenticatedUser)
-                # login(request,user_serializer)
-                return Response({"message":"User Logged in successfully","access_token":token["access_token"],"refresh_token":token["refresh_token"]},status.HTTP_201_CREATED)
+                return Response({"message":"User Logged in successfully","access_token":jwt_access_token["access_token"],"refresh_token":jwt_refresh_token},status.HTTP_200_OK)
             except Exception as e:
                 print(f"64 Error {str(e)} ")
                 return Response(f"Error {str(e)}",status=status.HTTP_400_BAD_REQUEST)
@@ -170,47 +181,56 @@ class GoogleRegisterView(APIView):
             return Response({'error': 'Failed to fetch user info from Google'}, status=status.HTTP_400_BAD_REQUEST)
 class GoogleLoginView(APIView):
     def post(self, request):
-
         # access_token = request.data.get('access_token')
         data=request.body
         data=data.decode('utf-8')
         login_data=json.loads(data)
-        print(login_data)
-        print(type(login_data))
-        authenticate_user=authenticate(request,email=login_data["email"],password=login_data["password"])
-        print(authenticate_user)
-        user=CustomUser.objects.get(email=login_data["email"])
-        if(user):
-            if(user.check_password(login_data["password"])):
-                print("user found")
-            else:
-                print("password not matched")
-        else:
-            print("user not found")
-        return Response("hello")
-        print(TokenModel.objects.get(userid=request.user.id))
-        User_Token_cred=TokenModel.objects.get(userid=request.user.id)
-        if(User_Token_cred):
-            access_token=User_Token_cred.google_access_token
-            refresh_token=User_Token_cred.google_refresh_token
-        else:
-            return Response("Please login with google")
-        # Use the access token to fetch user information from Google API
-        user_info_url = f"https://www.googleapis.com/oauth2/v1/userinfo?access_token={access_token}"
-        user_info_response = requests.get(user_info_url)
+        try:
+            authenticate_user=authenticate(request,email=login_data["email"],password=login_data["password"])
+            if(authenticate_user):
+                User_Token_cred=TokenModel.objects.get(userid=authenticate_user)
+                if(User_Token_cred):
+                    google_access_token=User_Token_cred.google_access_token
+                    jwt_refresh_token=User_Token_cred.jwt_refresh_token
 
-        if user_info_response.status_code == 200:
-            user_info = user_info_response.json()
-            # Process user info and perform login operation in your application
-            # For example, authenticate the user based on their Google ID or email
-            # Once authenticated, generate a JWT token or session for the user
-            # Return the token or session in the response
-            return Response({'token': 'generated_token'}, status=status.HTTP_200_OK)
-        else:
-            return Response({'error': 'Failed to fetch user info from Google'}, status=status.HTTP_400_BAD_REQUEST)
+                    user_info_url = f"https://www.googleapis.com/oauth2/v1/userinfo?access_token={google_access_token}"
+                    user_info_response = requests.get(user_info_url)
+                    print("user_info_response",user_info_response.text)
+                    if user_info_response.status_code == 200:
+                        access_token_response=customRequest.post("http://127.0.0.1:8000/api/refreshtoken/",data=jwt_refresh_token)
+                        access_token=access_token_response.json()
+                        login(request,authenticate_user)
+                        print("response access_token",access_token)
+                        return Response({"message":"Login successfully","access_token":access_token["access_token"],"refresh_token":jwt_refresh_token}, status=status.HTTP_200_OK)
+                    else:
+                        return Response({'error': 'Failed to fetch user info from Google'}, status=status.HTTP_400_BAD_REQUEST)
+                else:
+                    return Response("Please login with google")
+            else:
+                print("user not found")
+                return Response("user not found")
+        except Exception as e:
+            print(str(e))
+            return Response(f"Error ${str(e)}")
+        
+class TokenRefresh(TokenRefreshView):
+    def post(self, request, *args, **kwargs):
+        print("called")
+        data=request.body
+        print("data",data)
+        refresh_token=data.decode('utf-8')
+        print(refresh_token)
+        try:
+            access_token_obj=RefreshToken(refresh_token)
+            access_token = str(access_token_obj.access_token)
+            return Response({"access_token":access_token})
+        except Exception as e:
+            return Response({'error': str(e)})
 
 class MailRead(APIView):
     permission_classes=[IsAuthenticated]
+    pagination_class = PageNumberPagination 
+
     def get_body_content(self, parts):
         if not parts:
             return ''
@@ -286,29 +306,22 @@ class MailRead(APIView):
             service = build('gmail', 'v1', credentials=credentials)
             query = f'label:{lable_query}'
             results = self.fetch_emails(service, query,max_results=int(message_limit))
-            return Response(results)
+            # page = self.request.query_params.get('page', 1)
+            page_size = self.request.query_params.get('page_size', 10) 
+            # print("page",page)
+            paginator = self.pagination_class()
+            paginator.page_size=page_size
+            paginated_results = paginator.paginate_queryset(results, request)
+            print(paginated_results)
+            email_serializer = EmailSerializer(paginated_results, many=True)
+            return paginator.get_paginated_response({"data":email_serializer.data})
+            return paginator.get_paginated_response({"data":paginated_results})
     def handle_exception(self, exc):
         # Override the default exception handler to return custom response for unauthenticated users
         if isinstance(exc, permissions.IsAuthenticated):
             print("called error")
             return Response({"error": "You are not authenticated."}, status=status.HTTP_401_UNAUTHORIZED)
         return super().handle_exception(exc)
-class TokenRefresh(TokenRefreshView):
-    def post(self, request, *args, **kwargs):
-        data=request.data
-        print("327",data['refresh'])   
-        try:
-            serializer = self.get_serializer(data=request.data)
-            print("serializer",serializer)
-            serializer.is_valid(raise_exception=True)
-            refresh_token = serializer.validated_data.get('refresh')
-            print("hello",refresh_token)
-            # Create a new access token
-            access_token = RefreshToken(data['refresh'])
-            token = {'access': str(access_token.access_token)}
-            return Response(token)
-        except Exception as e:
-            return Response({'error': str(e)})
 class ComposeMail(APIView):
     def post(self, request):
         try:

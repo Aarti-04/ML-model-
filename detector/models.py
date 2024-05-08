@@ -1,7 +1,7 @@
 from django.db import models
 from django.contrib.auth.models import AbstractUser
 from django.utils.translation import gettext_lazy as _
-from .managers import CustomUserManager
+from .managers import CustomUserManager,TokenManager
 from django.conf import settings
 from django.utils import timezone
 import uuid
@@ -22,5 +22,7 @@ class TokenModel(models.Model):
     google_access_token=models.TextField(default="")
     google_refresh_token=models.TextField(default="")
     objects=models.Manager()
+    token_manager=TokenManager()
+
 
 # # Create your models here.
