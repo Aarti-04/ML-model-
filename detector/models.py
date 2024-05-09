@@ -31,8 +31,8 @@ class EmailMessageModel(models.Model):
     body=models.TextField(default="")
     date=models.DateTimeField()
     sender=models.CharField(max_length=255,default="")
-    to=models.CharField(default="")
-    is_spam=models.BooleanField(default=False)
+    To=models.CharField(default="")
+    spam=models.BooleanField(default=False)
     objects=models.Manager()
 
 

@@ -240,12 +240,16 @@ class MailRead(APIView):
                 exist_or_not=EmailMessageModel.objects.filter(message_id=mail["id"]).exists()
                 # mail["user_id"]=user_email
                 mail["date"] = datetime.strptime(mail["date"], '%a, %d %b %Y %H:%M:%S %z')
+                print("hello1...")
                 if not exist_or_not:
+                    created=EmailMessageModel.objects.create(**mail)
+                    s=created.save()
+                    print("hello...",s)
                     serialized_email=EmailSerializer(data=mail,many=False)
                     if(serialized_email.is_valid(raise_exception=True)):
-                        created,_=serialized_email.save()
-                        print("created..",created)
-                        print("____",_)
+                        # created,_=serialized_email.save()
+                        print("created......",created)
+                        print("____",s)
                 else:
                     break
         except Exception as e:

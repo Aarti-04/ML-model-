@@ -51,4 +51,4 @@ class EmailSerializer(serializers.ModelSerializer):
     # useremail=serializers.CharField(source='user_id.email')
     class Meta:
         model=EmailMessageModel
-        fields = ['id','message_id','header','body','date','sender','to','is_spam']
+        fields = ['id','message_id','header','body','date','sender','To','spam']
