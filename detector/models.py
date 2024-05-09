@@ -23,6 +23,20 @@ class TokenModel(models.Model):
     google_refresh_token=models.TextField(default="")
     objects=models.Manager()
     token_manager=TokenManager()
+class EmailMessageModel(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    # user_id=models.ForeignKey(CustomUser,on_delete=models.CASCADE)
+    message_id=models.CharField(default=None,unique=True)
+    header=models.CharField(max_length=255,default="")
+    body=models.TextField(default="")
+    date=models.DateTimeField()
+    sender=models.CharField(max_length=255,default="")
+    to=models.CharField(default="")
+    is_spam=models.BooleanField(default=False)
+    objects=models.Manager()
+
+
+
 
 
 # # Create your models here.
