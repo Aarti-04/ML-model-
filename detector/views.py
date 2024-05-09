@@ -61,13 +61,14 @@ from email.mime.multipart import MIMEMultipart
 import base64
 import json
 from google.oauth2.credentials import Credentials
-from .models import TokenModel,CustomUser
+from .models import TokenModel,CustomUser,EmailMessageModel
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenRefreshView
 from django.contrib.auth import authenticate,login,logout
 from rest_framework_simplejwt.tokens import RefreshToken, AccessToken
 from rest_framework.response import Response
 from .pagination import MyPaginator
+from datetime import datetime
 load_dotenv()
 
 # from rest_framework.views import APIView, Response
@@ -231,71 +232,87 @@ class MailRead(APIView):
     permission_classes=[IsAuthenticated]
     pagination_class = PageNumberPagination 
 
+    def save_mail_data(self,mail_data,user_email):
+        try:
+            for mail in mail_data:
+                # print("mail id........",mail["id"])
+                print("mail...",mail)
+                exist_or_not=EmailMessageModel.objects.filter(message_id=mail["id"]).exists()
+                # mail["user_id"]=user_email
+                mail["date"] = datetime.strptime(mail["date"], '%a, %d %b %Y %H:%M:%S %z')
+                if not exist_or_not:
+                    serialized_email=EmailSerializer(data=mail,many=False)
+                    if(serialized_email.is_valid(raise_exception=True)):
+                        created,_=serialized_email.save()
+                        print("created..",created)
+                        print("____",_)
+                else:
+                    break
+        except Exception as e:
+            print(str(e))
+
     def get_body_content(self, parts):
+        body=''
         if not parts:
-            return ''
+            return body
         for part in parts:
             if part.get('mimeType') == 'text/plain':
-                data = part['body']['data']
-                return base64.urlsafe_b64decode(data).decode()
-            elif part.get('mimeType') == 'text/html':
-                data = part['body']['data']
-                return base64.urlsafe_b64decode(data).decode()
+                data = part['body']['data'] 
+                if data:
+                    body+=base64.urlsafe_b64decode(data).decode() 
+            # elif part.get('mimeType') == 'text/html':
+            #     data = part['body']['data']
+            #     if data:
+            #         body +=base64.urlsafe_b64decode(data).decode() 
             elif part.get('mimeType') in ('multipart/mixed', 'multipart/alternative'):
-                return self.get_body_content(part.get('parts', []))
-        return ''
-    def fetch_emails(self, service, query, max_results=2):
+                body += self.get_body_content(part.get('parts', []))
+        return body
+    def fetch_emails(self, service, query,max_results=8):
         try:
-            response = service.users().messages().list(userId='me', q=query).execute()
+            response = service.users().messages().list(userId='me', q=query,maxResults=max_results).execute()
+            result_size_estimate = response.get('resultSizeEstimate', 0)
             messages = response.get('messages', [])
             results = []
-
+            print("response",response)
+            # print("messages",len(messages))
+            # print("result_size_estimate",result_size_estimate)
             for message in messages[:max_results]:
                 msg_id = message['id']
                 full_message = service.users().messages().get(userId='me', id=msg_id).execute()
                 payload = full_message['payload']
                 # print("payload",payload)
                 headers = payload['headers']
+                print("headers",headers)
                 sender = next((header['value'] for header in headers if header['name'] == 'From'), None)
+                To = next((header['value'] for header in headers if header['name'] == 'To'), None) 
                 subject = next((header['value'] for header in headers if header['name'] == 'Subject'), None)
                 date = next((header['value'] for header in headers if header['name'] == 'Date'), None)
-                # print(subject)
+                print("from_user",To)
                 parts = payload.get('parts', [])
                 body = self.get_body_content(parts)
-                # print("Body in mail read",body)
-                # body_without_link=self.remove_links_and_whitespace(body)
-                # print("body_without_link",body_without_link)
                 predict_response = customRequest.post('http://127.0.0.1:8000/api/predict/',body)
                 # print("predict_response",predict_response.text)
                 prediction_data = predict_response.json()
-                # print("prediction_data",prediction_data["prediction"])
-                spamOrNot=""
-                if(prediction_data["prediction"]=="spam"):
-                    spamOrNot=True
-                else:
-                    spamOrNot=False
-                
-                # body = self.get_body_content(payload['parts'])
-                results.append({'id': msg_id, 'header': subject, 'body': body,"date":date,'sender':sender,"spam":spamOrNot})       
-            return results
+                spamOrNot=True if(prediction_data["prediction"]=="spam") else False
+                results.append({'id': msg_id, 'header': subject, 'body': body,"date":date,'sender':sender,"To":To,"spam":spamOrNot})       
+            return results,result_size_estimate
         except HttpError as e:
             print(f"Error fetching emails: {e}")
-            return []
+            return [],0
     def get(self, request):
-            print(request.user)
+            user_email=request.user
             lable_query = request.GET.get("querylable")
             message_limit=request.GET.get("msglimit")
-            print(TokenModel.objects.get(userid=request.user.id))
+            # print(TokenModel.objects.get(userid=request.user.id))
             User_Token_cred=TokenModel.objects.get(userid=request.user.id)
             if(User_Token_cred):
                 access_token=User_Token_cred.google_access_token
                 refresh_token=User_Token_cred.google_refresh_token
             else:
                 return Response("Please login with google")
-            print("lable query",lable_query)
+            # print("lable query",lable_query)
             CLIENT_SECRET=os.environ.get("CLIENT_SECRET")
             CLIENT_ID=os.environ.get("CLIENT_ID")
-            access_token = request.GET.get("access_token")
             credentials = Credentials(token=access_token,token_uri=os.environ.get("ToKEN_URI"), refresh_token=refresh_token, client_id=CLIENT_ID, client_secret=CLIENT_SECRET)
             # Check if the credentials is expired
             if credentials.expired:
@@ -305,17 +322,19 @@ class MailRead(APIView):
                 credentials.refresh(request)   
             service = build('gmail', 'v1', credentials=credentials)
             query = f'label:{lable_query}'
-            results = self.fetch_emails(service, query,max_results=int(message_limit))
-            # page = self.request.query_params.get('page', 1)
-            page_size = self.request.query_params.get('page_size', 10) 
-            # print("page",page)
+            # query=""
+            results,result_size_estimate = self.fetch_emails(service, query,max_results=int(message_limit))
+            page = self.request.query_params.get('page', 1)
+            page_size = self.request.query_params.get('page_size',10) 
             paginator = self.pagination_class()
             paginator.page_size=page_size
+            paginator.count=result_size_estimate
             paginated_results = paginator.paginate_queryset(results, request)
-            print(paginated_results)
+            # print("paginated_results",paginated_results)
             email_serializer = EmailSerializer(paginated_results, many=True)
+            # print("paginated_results",paginated_results)
+            self.save_mail_data(paginated_results,user_email)
             return paginator.get_paginated_response({"data":email_serializer.data})
-            return paginator.get_paginated_response({"data":paginated_results})
     def handle_exception(self, exc):
         # Override the default exception handler to return custom response for unauthenticated users
         if isinstance(exc, permissions.IsAuthenticated):

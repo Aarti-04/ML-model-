@@ -4,7 +4,7 @@ from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from django.contrib.auth import authenticate
 from rest_framework.exceptions import AuthenticationFailed
 from rest_framework_simplejwt.tokens import Token
-from .models import CustomUser,TokenModel
+from .models import CustomUser,TokenModel,EmailMessageModel
 from django.utils.encoding import smart_str,force_bytes,DjangoUnicodeDecodeError
 from django.contrib.auth.tokens import PasswordResetTokenGenerator
 from django.utils.http import urlsafe_base64_decode,urlsafe_base64_encode
@@ -39,10 +39,16 @@ class CustomeUserSerializer(serializers.ModelSerializer):
         exclude=["password"]
 
 
-class EmailSerializer(serializers.Serializer):
-    id = serializers.CharField()
-    header = serializers.CharField()
-    body = serializers.CharField()
-    date = serializers.CharField()
-    sender = serializers.CharField()
-    spam = serializers.BooleanField()
+class EmailSerializer(serializers.ModelSerializer):
+    # id = serializers.CharField()
+    # header = serializers.CharField()
+    # body = serializers.CharField()
+    # date = serializers.CharField()
+    # sender = serializers.CharField()
+    # To=serializers.CharField()
+    # spam = serializers.BooleanField()
+    # user_id=serializers.CharField(source='CustomUser.id')
+    # useremail=serializers.CharField(source='user_id.email')
+    class Meta:
+        model=EmailMessageModel
+        fields = ['id','message_id','header','body','date','sender','to','is_spam']
