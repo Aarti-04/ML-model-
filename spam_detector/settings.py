@@ -136,13 +136,14 @@ WSGI_APPLICATION = "spam_detector.wsgi.application"
 #         "NAME": BASE_DIR / "db.sqlite3",
 #     }
 # }
-print( "db",os.environ.get("DBNAME"))
-print("username",os.environ.get("USER"))
-print("username",os.environ.get("CLIENT_SECRET"))
-print("username",os.environ.get("CLIENT_ID"))
-print("tokenuseri",os.environ.get("ToKEN_URI"))
-print("user",os.environ.get("USERNAME1"))
-print("passs",os.environ.get("PASSWORD1"))
+
+# print( "db",os.environ.get("DBNAME"))
+# print("username",os.environ.get("USER"))
+# print("username",os.environ.get("CLIENT_SECRET"))
+# print("username",os.environ.get("CLIENT_ID"))
+# print("tokenuseri",os.environ.get("ToKEN_URI"))
+# print("user",os.environ.get("USERNAME1"))
+# print("passs",os.environ.get("PASSWORD1"))
 
 
 

@@ -49,6 +49,8 @@ class EmailSerializer(serializers.ModelSerializer):
     # spam = serializers.BooleanField()
     # user_id=serializers.CharField(source='CustomUser.id')
     # useremail=serializers.CharField(source='user_id.email')
+    def create(self, validated_data):
+        return super().create(validated_data)
     class Meta:
         model=EmailMessageModel
-        fields = ['id','message_id','header','body','date','sender','To','spam']
+        fields = "__all__"

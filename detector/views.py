@@ -38,6 +38,7 @@ import jwt
 import requests
 from rest_framework.serializers import ValidationError
 from rest_framework.pagination import PageNumberPagination
+from bs4 import BeautifulSoup
 from .serializers import CustomeUserSerializer,EmailSerializer
 import random
 import string
@@ -232,26 +233,33 @@ class MailRead(APIView):
     permission_classes=[IsAuthenticated]
     pagination_class = PageNumberPagination 
 
-    def save_mail_data(self,mail_data,user_email):
+    def save_mail_data(self,mail_data):
         try:
             for mail in mail_data:
                 # print("mail id........",mail["id"])
                 print("mail...",mail)
-                exist_or_not=EmailMessageModel.objects.filter(message_id=mail["id"]).exists()
+                exist_mail=EmailMessageModel.objects.filter(message_id=mail["message_id"]).exists()
                 # mail["user_id"]=user_email
-                mail["date"] = datetime.strptime(mail["date"], '%a, %d %b %Y %H:%M:%S %z')
-                print("hello1...")
-                if not exist_or_not:
-                    created=EmailMessageModel.objects.create(**mail)
-                    s=created.save()
-                    print("hello...",s)
+                print("exist_mail",exist_mail)
+                date_string_without_timezone = mail["date"].replace(' (UTC)', '')
+                # Parse the date string
+                mail["date"] = datetime.strptime(date_string_without_timezone, '%a, %d %b %Y %H:%M:%S %z')
+                # mail["date"] = datetime.strptime(mail["date"], '%a, %d %b %Y %H:%M:%S %z')
+                print("mail[date]", mail["date"])
+                if not exist_mail:
+                    # created=EmailMessageModel.objects.create(**mail)
+                    # s=created.save()
+                    print("not exist...")
                     serialized_email=EmailSerializer(data=mail,many=False)
-                    if(serialized_email.is_valid(raise_exception=True)):
-                        # created,_=serialized_email.save()
-                        print("created......",created)
-                        print("____",s)
+                    try:
+                        if(serialized_email.is_valid(raise_exception=True)):
+                            created=serialized_email.save()
+                            print("created......",created)
+                            # print("____",s)
+                    except Exception as e:
+                            print(f"error...${str(e)}")
                 else:
-                    break
+                    continue
         except Exception as e:
             print(str(e))
 
@@ -260,24 +268,42 @@ class MailRead(APIView):
         if not parts:
             return body
         for part in parts:
-            if part.get('mimeType') == 'text/plain':
-                data = part['body']['data'] 
+            # if part.get('mimeType') == 'text/plain':
+            #     data = part['body']['data'] 
+            #     if data:s
+            #         clean_one = data.replace("-","+") # decoding from Base64 to UTF-8
+            #         clean_one = clean_one.replace("_","/") # decoding from Base64 to UTF-8
+            #         clean_two = base64.b64decode (bytes(clean_one, 'UTF-8')) # decoding from Base64 to UTF-8
+            #         soup = BeautifulSoup(clean_two , "lxml" )
+            #         print("soup.body()",soup.body())
+            #         msg_body_content = soup.body.get_text()
+            #         cleaned_content = re.sub(r'\n+', '\n', msg_body_content)  # Remove extra newlines
+            #         cleaned_msg_body_content = cleaned_content.strip()
+            #         print("msg_body",cleaned_msg_body_content)
+            #         # body=msg_body_content
+            #         if(msg_body_content):
+            #             body["plainBodyText"]=msg_body_content
+            #         else:
+            #             body["plainBodyText"]=""
+            #         print("plainbody....",msg_body_content)
+                    # body+=base64.urlsafe_b64decode(data).decode() 
+            if part.get('mimeType') == 'text/html':
+                data = part['body']['data']
                 if data:
-                    body+=base64.urlsafe_b64decode(data).decode() 
-            # elif part.get('mimeType') == 'text/html':
-            #     data = part['body']['data']
-            #     if data:
-            #         body +=base64.urlsafe_b64decode(data).decode() 
-            elif part.get('mimeType') in ('multipart/mixed', 'multipart/alternative'):
-                body += self.get_body_content(part.get('parts', []))
+                    body=base64.urlsafe_b64decode(data).decode()
+                else:
+                    body=""
+
+            # elif part.get('mimeType') in ('multipart/mixed', 'multipart/alternative'):
+                # body += self.get_body_content(part.get('parts', []))
         return body
     def fetch_emails(self, service, query,max_results=8):
         try:
             response = service.users().messages().list(userId='me', q=query,maxResults=max_results).execute()
-            result_size_estimate = response.get('resultSizeEstimate', 0)
+            # result_size_estimate = response.get('resultSizeEstimate', 0)
             messages = response.get('messages', [])
             results = []
-            print("response",response)
+            # print("response",response)
             # print("messages",len(messages))
             # print("result_size_estimate",result_size_estimate)
             for message in messages[:max_results]:
@@ -286,26 +312,28 @@ class MailRead(APIView):
                 payload = full_message['payload']
                 # print("payload",payload)
                 headers = payload['headers']
-                print("headers",headers)
+                snippet=full_message["snippet"]
+                print("snippet...",snippet)
                 sender = next((header['value'] for header in headers if header['name'] == 'From'), None)
                 To = next((header['value'] for header in headers if header['name'] == 'To'), None) 
                 subject = next((header['value'] for header in headers if header['name'] == 'Subject'), None)
                 date = next((header['value'] for header in headers if header['name'] == 'Date'), None)
-                print("from_user",To)
+                print("date of mail",date)
                 parts = payload.get('parts', [])
                 body = self.get_body_content(parts)
+                # print("BodyText",body)
                 predict_response = customRequest.post('http://127.0.0.1:8000/api/predict/',body)
                 # print("predict_response",predict_response.text)
                 prediction_data = predict_response.json()
                 spamOrNot=True if(prediction_data["prediction"]=="spam") else False
-                results.append({'id': msg_id, 'header': subject, 'body': body,"date":date,'sender':sender,"To":To,"spam":spamOrNot})       
-            return results,result_size_estimate
+                results.append({'snippet':snippet,'message_id': msg_id, 'header': subject, "body":body,"date":date,'sender':sender,"To":To,"spam":spamOrNot})       
+            return results
         except HttpError as e:
             print(f"Error fetching emails: {e}")
             return [],0
     def get(self, request):
-            user_email=request.user
-            lable_query = request.GET.get("querylable")
+            # user_email=request.user
+            # lable_query = request.GET.get("querylable")
             message_limit=request.GET.get("msglimit")
             # print(TokenModel.objects.get(userid=request.user.id))
             User_Token_cred=TokenModel.objects.get(userid=request.user.id)
@@ -325,19 +353,20 @@ class MailRead(APIView):
                 request = requests.Request()
                 credentials.refresh(request)   
             service = build('gmail', 'v1', credentials=credentials)
-            query = f'label:{lable_query}'
-            # query=""
-            results,result_size_estimate = self.fetch_emails(service, query,max_results=int(message_limit))
+            # query = f'label:{lable_query}'
+            query=""
+            results = self.fetch_emails(service, query,max_results=int(message_limit))
             page = self.request.query_params.get('page', 1)
             page_size = self.request.query_params.get('page_size',10) 
             paginator = self.pagination_class()
+            paginator.page=page
             paginator.page_size=page_size
-            paginator.count=result_size_estimate
+            # paginator.count=result_size_estimate
             paginated_results = paginator.paginate_queryset(results, request)
             # print("paginated_results",paginated_results)
             email_serializer = EmailSerializer(paginated_results, many=True)
             # print("paginated_results",paginated_results)
-            self.save_mail_data(paginated_results,user_email)
+            self.save_mail_data(paginated_results)
             return paginator.get_paginated_response({"data":email_serializer.data})
     def handle_exception(self, exc):
         # Override the default exception handler to return custom response for unauthenticated users
@@ -345,6 +374,12 @@ class MailRead(APIView):
             print("called error")
             return Response({"error": "You are not authenticated."}, status=status.HTTP_401_UNAUTHORIZED)
         return super().handle_exception(exc)
+class MailDataSearchAndSort(APIView):
+    def get(self,request):
+        search=request.GET.get("search") or ""
+        order_by=request.GET.get("orderby") or "updated_at" 
+        return Response("")
+        
 class ComposeMail(APIView):
     def post(self, request):
         try:
