@@ -69,6 +69,8 @@ from django.contrib.auth import authenticate,login,logout
 from rest_framework_simplejwt.tokens import RefreshToken, AccessToken
 from rest_framework.response import Response
 from .pagination import MyPaginator
+from rest_framework import generics,pagination
+from rest_framework.filters import SearchFilter,OrderingFilter
 from datetime import datetime
 load_dotenv()
 
@@ -98,6 +100,7 @@ load_dotenv()
 
 # nltk.download('stopwords')
 # Create your views here.
+EMAIL_PATTERN = re.compile(r'<([^<>]+)>')
 class LoginUser(APIView):
     def post(self,request):
         data=request.body
@@ -229,28 +232,67 @@ class TokenRefresh(TokenRefreshView):
         except Exception as e:
             return Response({'error': str(e)})
 
+
+class MailFromDb(generics.ListCreateAPIView):
+    # queryset=EmailMessageModel.objects.all()
+    serializer_class=EmailSerializer
+    permission_classes=[IsAuthenticated]
+    pagination_class=pagination.PageNumberPagination
+    pagination_class.page_size=10
+    filter_backends=[SearchFilter,OrderingFilter]
+    search_fields = ['header', 'sender', 'recipient']  # Specify the fields you want to enable search on
+
+    # Define fields to sort
+    ordering_fields = ['id', 'header', 'sender', 'recipient', 'date']  # Specify the fields you want to enable sorting on
+
+    # By default, if no ordering is provided, order by timestamp in descending order
+    ordering = ['-date']
+    def get_queryset(self):
+        queryset = EmailMessageModel.objects.all()
+        query_type = self.request.query_params.get('query_type')  # Assuming 'query_type' is the query parameter to specify sent or inbox
+        if query_type == 'sent':
+            queryset = queryset.filter(sender=self.request.user)  # Filter emails sent by the authenticated user
+        elif query_type == 'inbox':
+            queryset = queryset.filter(recipient=self.request.user) 
+        elif query_type=="spam":
+            queryset = queryset.filter(spam=True) 
+             # Filter emails received by the authenticated user
+        return queryset
 class MailRead(APIView):
     permission_classes=[IsAuthenticated]
     pagination_class = PageNumberPagination 
 
+    def extract_email_info(self,data):
+        processed_mail_data=data
+        processed_mail_data["date"] = datetime.strptime(data["date"].replace(' (UTC)', ''), '%a, %d %b %Y %H:%M:%S %z')
+        recipient_email_matched=re.search(EMAIL_PATTERN,data["recipient"])
+        processed_mail_data["recipient"]=recipient_email_matched.group(1) if recipient_email_matched else data["recipient"].strip()
+        sender_email_matched=re.search(EMAIL_PATTERN,data["sender"])
+        processed_mail_data["sender"]=sender_email_matched.group(1) if sender_email_matched else data["sender"].strip()
+        print(processed_mail_data)
+        return  processed_mail_data
+
     def save_mail_data(self,mail_data):
         try:
+            print(datetime.time)
             for mail in mail_data:
                 # print("mail id........",mail["id"])
                 print("mail...",mail)
                 exist_mail=EmailMessageModel.objects.filter(message_id=mail["message_id"]).exists()
                 # mail["user_id"]=user_email
                 print("exist_mail",exist_mail)
-                date_string_without_timezone = mail["date"].replace(' (UTC)', '')
-                # Parse the date string
-                mail["date"] = datetime.strptime(date_string_without_timezone, '%a, %d %b %Y %H:%M:%S %z')
-                # mail["date"] = datetime.strptime(mail["date"], '%a, %d %b %Y %H:%M:%S %z')
-                print("mail[date]", mail["date"])
+                processed_data=self.extract_email_info(mail)
+                # date_string_without_timezone = mail["date"].replace(' (UTC)', '')
+                # # Parse the date string
+                # mail["date"] = datetime.strptime(date_string_without_timezone, '%a, %d %b %Y %H:%M:%S %z')
+                
+                # # mail["date"] = datetime.strptime(mail["date"], '%a, %d %b %Y %H:%M:%S %z')
+                # print("mail[date]", mail["date"])
                 if not exist_mail:
                     # created=EmailMessageModel.objects.create(**mail)
                     # s=created.save()
                     print("not exist...")
-                    serialized_email=EmailSerializer(data=mail,many=False)
+                    serialized_email=EmailSerializer(data=processed_data,many=False)
                     try:
                         if(serialized_email.is_valid(raise_exception=True)):
                             created=serialized_email.save()
@@ -262,6 +304,7 @@ class MailRead(APIView):
                     continue
         except Exception as e:
             print(str(e))
+        print(datetime.time)
 
     def get_body_content(self, parts):
         body=''
@@ -326,14 +369,14 @@ class MailRead(APIView):
                 # print("predict_response",predict_response.text)
                 prediction_data = predict_response.json()
                 spamOrNot=True if(prediction_data["prediction"]=="spam") else False
-                results.append({'snippet':snippet,'message_id': msg_id, 'header': subject, "body":body,"date":date,'sender':sender,"To":To,"spam":spamOrNot})       
+                results.append({'snippet':snippet,'message_id': msg_id, 'header': subject, "body":body,"date":date,'sender':sender,"recipient":To,"spam":spamOrNot})       
             return results
         except HttpError as e:
             print(f"Error fetching emails: {e}")
             return [],0
     def get(self, request):
             # user_email=request.user
-            # lable_query = request.GET.get("querylable")
+            lable_query = request.GET.get("querylable")
             message_limit=request.GET.get("msglimit")
             # print(TokenModel.objects.get(userid=request.user.id))
             User_Token_cred=TokenModel.objects.get(userid=request.user.id)
@@ -353,8 +396,8 @@ class MailRead(APIView):
                 request = requests.Request()
                 credentials.refresh(request)   
             service = build('gmail', 'v1', credentials=credentials)
-            # query = f'label:{lable_query}'
-            query=""
+            query = f'label:{lable_query}'
+            # query=""
             results = self.fetch_emails(service, query,max_results=int(message_limit))
             page = self.request.query_params.get('page', 1)
             page_size = self.request.query_params.get('page_size',10) 
@@ -374,11 +417,11 @@ class MailRead(APIView):
             print("called error")
             return Response({"error": "You are not authenticated."}, status=status.HTTP_401_UNAUTHORIZED)
         return super().handle_exception(exc)
-class MailDataSearchAndSort(APIView):
-    def get(self,request):
-        search=request.GET.get("search") or ""
-        order_by=request.GET.get("orderby") or "updated_at" 
-        return Response("")
+# class MailDataSearchAndSort(APIView):
+#     def get(self,request):
+#         search=request.GET.get("search") or ""
+#         order_by=request.GET.get("orderby") or "updated_at" 
+#         return Response("")
         
 class ComposeMail(APIView):
     def post(self, request):
