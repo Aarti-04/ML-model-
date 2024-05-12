@@ -46,12 +46,16 @@
 # # #         pass
 
 from channels.generic.websocket import AsyncWebsocketConsumer
+import requests as customRequest
+ 
 
 class MyConsumer(AsyncWebsocketConsumer):
     async def connect(self):
         await self.accept()
         print("WebSocket connection established.")
-        await self.send(text_data="Hello, client!")
+        # res= customRequest.get("http://127.0.0.1:8000/api/mailread/")
+        # print("res",res.json())
+        await self.send(text_data="Mail Read")
 
 
     async def disconnect(self, close_code):

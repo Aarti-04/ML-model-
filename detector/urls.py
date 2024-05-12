@@ -17,7 +17,7 @@ urlpatterns = [
     path("mailreadfromdb/",MailFromDb.as_view(),name="mailfromdb"),
     path("composemail/",ComposeMail.as_view(),name="ComposeMail"),
     path("refreshtoken/",TokenRefresh.as_view(),name="refreshtoken"),
-    path("emailfromdb/",MailFromDataBase.as_view(),name="emailfromdb")
+    # path("emailfromdb/",MailFromDataBase.as_view(),name="emailfromdb")
     
 
 

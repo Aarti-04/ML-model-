@@ -261,7 +261,7 @@ class MailFromDb(generics.ListCreateAPIView):
              # Filter emails received by the authenticated user
         return queryset
 class MailRead(APIView):
-    permission_classes=[IsAuthenticated]
+    # permission_classes=[IsAuthenticated]
     pagination_class = PageNumberPagination 
 
     def extract_email_info(self,data):
@@ -314,9 +314,11 @@ class MailRead(APIView):
         if not parts:
             return body
         for part in parts:
-            # if part.get('mimeType') == 'text/plain':
-            #     data = part['body']['data'] 
-            #     if data:s
+            if part.get('mimeType') == 'text/plain':
+                data1 = part['body']['data'] 
+                if data1:
+                    print("data1",data1)
+                    
             #         clean_one = data.replace("-","+") # decoding from Base64 to UTF-8
             #         clean_one = clean_one.replace("_","/") # decoding from Base64 to UTF-8
             #         clean_two = base64.b64decode (bytes(clean_one, 'UTF-8')) # decoding from Base64 to UTF-8
@@ -343,7 +345,7 @@ class MailRead(APIView):
             # elif part.get('mimeType') in ('multipart/mixed', 'multipart/alternative'):
                 # body += self.get_body_content(part.get('parts', []))
         return body
-    def fetch_emails(self, service, query,max_results=8):
+    def fetch_emails(self, service, query,max_results=10):
         try:
             response = service.users().messages().list(userId='me', q=query,maxResults=max_results).execute()
             # result_size_estimate = response.get('resultSizeEstimate', 0)
@@ -379,8 +381,8 @@ class MailRead(APIView):
             return [],0
     def get(self, request):
             # user_email=request.user
-            lable_query = request.GET.get("querylable")
-            message_limit=request.GET.get("msglimit")
+            # lable_query = request.GET.get("querylable")
+            # message_limit=request.GET.get("msglimit")
             # print(TokenModel.objects.get(userid=request.user.id))
             User_Token_cred=TokenModel.objects.get(userid=request.user.id)
             if(User_Token_cred):
@@ -399,9 +401,9 @@ class MailRead(APIView):
                 request = requests.Request()
                 credentials.refresh(request)   
             service = build('gmail', 'v1', credentials=credentials)
-            query = f'label:{lable_query}'
-            # query=""
-            results = self.fetch_emails(service, query,max_results=int(message_limit))
+            # query = f'label:{lable_query}'
+            query=""
+            results = self.fetch_emails(service, query)
             page = self.request.query_params.get('page', 1)
             page_size = self.request.query_params.get('page_size',10) 
             paginator = self.pagination_class()

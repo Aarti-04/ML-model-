@@ -32,18 +32,18 @@ ALLOWED_HOSTS = []
 # Application definition
 
 INSTALLED_APPS = [
+    "daphne",
     "django.contrib.admin",
     "django.contrib.auth",
     "django.contrib.contenttypes",
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
-    'channels',
+    # 'channels',
     "detector",
     "rest_framework",
     
 ]
-# ASGI_APPLICATION = 'spam_detector.asgi.application'
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
@@ -55,6 +55,8 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    # "channels.middleware.AsgiMiddleware",
+    # "channels.asgi.AsgiMiddleware",
     # "detector.middleware.TokenValidationMiddleware"
 ]
 AUTHENTICATION_BACKENDS=[
@@ -68,6 +70,9 @@ REST_FRAMEWORK = {
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
     'PAGE_SIZE': 10 
 }
+# WSGI_APPLICATION = "spam_detector.wsgi.application"
+ASGI_APPLICATION = 'spam_detector.asgi.application'
+
 ROOT_URLCONF = "spam_detector.urls"
 AUTH_USER_MODEL = "detector.CustomUser"
 
@@ -126,14 +131,21 @@ TEMPLATES = [
         },
     },
 ]
+# CHANNEL_LAYERS = {
+#     'default': {
+#         'BACKEND': 'channels.layers.InMemoryChannelLayer',
+#     },
+# }
 CHANNEL_LAYERS = {
-    'default': {
-        'BACKEND': 'channels.layers.InMemoryChannelLayer',
+    "default": {
+        "BACKEND": "channels_redis.core.RedisChannelLayer",
+        "CONFIG": {
+            "hosts": [("localhost", 6379)],
+        },
     },
 }
 
 
-WSGI_APPLICATION = "spam_detector.wsgi.application"
 
 # Database
 # https://docs.djangoproject.com/en/5.0/ref/settings/#databases
