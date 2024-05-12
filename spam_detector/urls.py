@@ -20,5 +20,6 @@ from django.urls import path,include
 import detector
 urlpatterns = [
     path("admin/", admin.site.urls),
-    path("api/",include("detector.urls"))
+    path("api/",include("detector.urls")),
+    # path("spammodel/")
 ]

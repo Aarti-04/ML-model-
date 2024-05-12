@@ -52,6 +52,7 @@ import google.auth
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 from rest_framework.views import APIView
+from rest_framework import generics
 from rest_framework.response import Response
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
@@ -70,34 +71,10 @@ from rest_framework_simplejwt.tokens import RefreshToken, AccessToken
 from rest_framework.response import Response
 from .pagination import MyPaginator
 from datetime import datetime
+
 load_dotenv()
 
-# from rest_framework.views import APIView, Response
-# from django.http import JsonResponse
-# import os
-# import json
-# from google.oauth2.credentials import Credentials
-# from google_auth_oauthlib.flow import InstalledAppFlow
-# from googleapiclient.errors import HttpError
-# import googleapiclient.discovery
-# from google.oauth2 import service_account
-# import requests
-# from dotenv import load_dotenv
-# import nltk
-# import email
-# from nltk.corpus import stopwords
-# from nltk.stem import WordNetLemmatizer
-# import re
-# import jwt
-# import random
-# import string
-# from django.contrib.auth.hashers import make_password
-# from rest_framework.exceptions import ValidationError
-# from django.contrib.auth import authenticate, login, logout
-# from email.message import EmailMessage
 
-# nltk.download('stopwords')
-# Create your views here.
 class LoginUser(APIView):
     def post(self,request):
         data=request.body
@@ -229,6 +206,10 @@ class TokenRefresh(TokenRefreshView):
         except Exception as e:
             return Response({'error': str(e)})
 
+class MailFromDataBase(generics.ListCreateAPIView):
+    queryset=EmailMessageModel.objects.all()
+    serializer_class=EmailSerializer
+    permission_classes=[IsAuthenticated]
 class MailRead(APIView):
     permission_classes=[IsAuthenticated]
     pagination_class = PageNumberPagination 
@@ -259,7 +240,8 @@ class MailRead(APIView):
                     except Exception as e:
                             print(f"error...${str(e)}")
                 else:
-                    continue
+                    print("in else")
+                    break
         except Exception as e:
             print(str(e))
 
@@ -322,11 +304,11 @@ class MailRead(APIView):
                 parts = payload.get('parts', [])
                 body = self.get_body_content(parts)
                 # print("BodyText",body)
-                predict_response = customRequest.post('http://127.0.0.1:8000/api/predict/',body)
-                # print("predict_response",predict_response.text)
-                prediction_data = predict_response.json()
-                spamOrNot=True if(prediction_data["prediction"]=="spam") else False
-                results.append({'snippet':snippet,'message_id': msg_id, 'header': subject, "body":body,"date":date,'sender':sender,"To":To,"spam":spamOrNot})       
+                predict_response = customRequest.post('http://127.0.0.1:8000/api/predict/',json={"message":body})
+                print("predict_response",predict_response.text)
+                # prediction_data = predict_response.json()
+                # spamOrNot=True if(prediction_data["prediction"]=="spam") else False
+                results.append({'snippet':snippet,'message_id': msg_id, 'header': subject, "body":body,"date":date,'sender':sender,"To":To,"spam":False})       
             return results
         except HttpError as e:
             print(f"Error fetching emails: {e}")
