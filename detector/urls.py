@@ -1,7 +1,7 @@
 from django.contrib import admin
 from django.urls import path
-from .views import MailFromDataBase,GoogleLoginView,Logout,Predict,GoogleRegisterView,MailRead,ComposeMail,TokenRefresh,LoginUser
-from spammodel import views
+from .views import MailFromDb,GoogleLoginView,Logout,Predict,GoogleRegisterView,MailRead,ComposeMail,TokenRefresh,LoginUser
+
 urlpatterns = [
     # path("admin/", admin.site.urls),
     path("predict/",Predict.as_view(),name="predict"),
@@ -14,6 +14,7 @@ urlpatterns = [
     # path("google-auth-verify/",GoogleAuthVerify.as_view(),name="googleAuth"),
     # path("mailoperation",MailOperation.as_view(),name="MailOperation"),
     path("mailread/",MailRead.as_view(),name="mailread"),
+    path("mailreadfromdb/",MailFromDb.as_view(),name="mailfromdb"),
     path("composemail/",ComposeMail.as_view(),name="ComposeMail"),
     path("refreshtoken/",TokenRefresh.as_view(),name="refreshtoken"),
     path("emailfromdb/",MailFromDataBase.as_view(),name="emailfromdb")
