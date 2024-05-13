@@ -73,35 +73,10 @@ from .pagination import MyPaginator
 from rest_framework import generics,pagination
 from rest_framework.filters import SearchFilter,OrderingFilter
 from datetime import datetime
-
+import asyncio
 load_dotenv()
 
-# from rest_framework.views import APIView, Response
-# from django.http import JsonResponse
-# import os
-# import json
-# from google.oauth2.credentials import Credentials
-# from google_auth_oauthlib.flow import InstalledAppFlow
-# from googleapiclient.errors import HttpError
-# import googleapiclient.discovery
-# from google.oauth2 import service_account
-# import requests
-# from dotenv import load_dotenv
-# import nltk
-# import email
-# from nltk.corpus import stopwords
-# from nltk.stem import WordNetLemmatizer
-# import re
-# import jwt
-# import random
-# import string
-# from django.contrib.auth.hashers import make_password
-# from rest_framework.exceptions import ValidationError
-# from django.contrib.auth import authenticate, login, logout
-# from email.message import EmailMessage
 
-# nltk.download('stopwords')
-# Create your views here.
 EMAIL_PATTERN = re.compile(r'<([^<>]+)>')
 class LoginUser(APIView):
     def post(self,request):
@@ -260,6 +235,18 @@ class MailFromDb(generics.ListCreateAPIView):
             queryset = queryset.filter(spam=True) 
              # Filter emails received by the authenticated user
         return queryset
+
+class MailReadApi(APIView):
+    def get(self,request):
+        print(request.user.id)
+        User_Token_cred=TokenModel.objects.get(userid=request.user.id)
+        if(User_Token_cred):
+            access_token=User_Token_cred.google_access_token
+            refresh_token=User_Token_cred.google_refresh_token
+            return Response({"access_token":access_token,"refresh_token":refresh_token})
+        else:
+            return Response("Please login with google")
+
 class MailRead(APIView):
     # permission_classes=[IsAuthenticated]
     pagination_class = PageNumberPagination 
@@ -318,23 +305,6 @@ class MailRead(APIView):
                 data1 = part['body']['data'] 
                 if data1:
                     print("data1",data1)
-                    
-            #         clean_one = data.replace("-","+") # decoding from Base64 to UTF-8
-            #         clean_one = clean_one.replace("_","/") # decoding from Base64 to UTF-8
-            #         clean_two = base64.b64decode (bytes(clean_one, 'UTF-8')) # decoding from Base64 to UTF-8
-            #         soup = BeautifulSoup(clean_two , "lxml" )
-            #         print("soup.body()",soup.body())
-            #         msg_body_content = soup.body.get_text()
-            #         cleaned_content = re.sub(r'\n+', '\n', msg_body_content)  # Remove extra newlines
-            #         cleaned_msg_body_content = cleaned_content.strip()
-            #         print("msg_body",cleaned_msg_body_content)
-            #         # body=msg_body_content
-            #         if(msg_body_content):
-            #             body["plainBodyText"]=msg_body_content
-            #         else:
-            #             body["plainBodyText"]=""
-            #         print("plainbody....",msg_body_content)
-                    # body+=base64.urlsafe_b64decode(data).decode() 
             if part.get('mimeType') == 'text/html':
                 data = part['body']['data']
                 if data:
@@ -345,9 +315,9 @@ class MailRead(APIView):
             # elif part.get('mimeType') in ('multipart/mixed', 'multipart/alternative'):
                 # body += self.get_body_content(part.get('parts', []))
         return body
-    def fetch_emails(self, service, query,max_results=10):
+    async def fetch_emails(self, service, query,max_results=10):
         try:
-            response = service.users().messages().list(userId='me', q=query,maxResults=max_results).execute()
+            response = await service.users().messages().list(userId='me', q=query,maxResults=max_results).execute()
             # result_size_estimate = response.get('resultSizeEstimate', 0)
             messages = response.get('messages', [])
             results = []
@@ -404,11 +374,11 @@ class MailRead(APIView):
             # query = f'label:{lable_query}'
             query=""
             results = self.fetch_emails(service, query)
-            page = self.request.query_params.get('page', 1)
-            page_size = self.request.query_params.get('page_size',10) 
+            # page = self.request.query_params.get('page', 1)
+            # page_size = self.request.query_params.get('page_size',10) 
             paginator = self.pagination_class()
-            paginator.page=page
-            paginator.page_size=page_size
+            paginator.page=1
+            paginator.page_size=10
             # paginator.count=result_size_estimate
             paginated_results = paginator.paginate_queryset(results, request)
             # print("paginated_results",paginated_results)
@@ -487,8 +457,6 @@ class Predict(APIView):
         body = body.lower()
         # print("processed body",body)
         return body
-
-
     def post(self,request):
         data = request.body
         # print(data)

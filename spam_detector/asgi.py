@@ -11,7 +11,7 @@ import os
 
 from channels.routing import ProtocolTypeRouter,URLRouter
 from django.core.asgi import get_asgi_application
-from django.urls import path
+from django.urls import re_path
 from detector.consumers import MyConsumer
 
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "spam_detector.settings")
@@ -20,7 +20,6 @@ os.environ.setdefault("DJANGO_SETTINGS_MODULE", "spam_detector.settings")
 application = ProtocolTypeRouter({
     "http": get_asgi_application(),
     "websocket":URLRouter([
-     path('practice/', MyConsumer.as_asgi())
+     re_path(r'mailread/$', MyConsumer.as_asgi())
 ])
-    # Just HTTP for now. (We can add other protocols later.)
 })
