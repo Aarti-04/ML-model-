@@ -74,6 +74,7 @@ from rest_framework import generics,pagination
 from rest_framework.filters import SearchFilter,OrderingFilter
 from datetime import datetime
 import asyncio
+from django.core.exceptions import ObjectDoesNotExist
 load_dotenv()
 
 
@@ -398,6 +399,31 @@ class MailRead(APIView):
 #         order_by=request.GET.get("orderby") or "updated_at" 
 #         return Response("")
         
+class MailArchived(APIView):
+    def patch(self,request):
+        try:
+            message_id=request.query_params.get("message_id")
+            print("called",message_id)
+            if not message_id:
+                raise ValidationError("message id invalid or not provided")
+                 
+            message_object=EmailMessageModel.objects.filter(id=message_id).first()
+            print(message_object)
+            if not message_object:
+                raise ObjectDoesNotExist("Mail not exist")
+            if(message_object.is_archived):
+                return Response("Already in archived ",status=status.HTTP_400_BAD_REQUEST)
+            setattr(message_object,"is_archived",True)
+            print(message_object.is_archived)
+            res=message_object.save()
+            print(res)
+            return Response("Messsage archived successfully",status=status.HTTP_200_OK)
+        except ValidationError as e:
+            return Response(e.detail,status=status.HTTP_400_BAD_REQUEST)
+        except ObjectDoesNotExist as e:
+            return Response(f"Mail data not exist {e}",status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response(f"{str(e)}",status=status.HTTP_400_BAD_REQUEST)
 class ComposeMail(APIView):
     def post(self, request):
         try:

@@ -1,6 +1,6 @@
 from django.contrib import admin
 from django.urls import path
-from .views import MailReadApi,MailFromDb,GoogleLoginView,Logout,Predict,GoogleRegisterView,MailRead,ComposeMail,TokenRefresh,LoginUser
+from .views import MailArchived,MailReadApi,MailFromDb,GoogleLoginView,Logout,Predict,GoogleRegisterView,MailRead,ComposeMail,TokenRefresh,LoginUser
 
 urlpatterns = [
     # path("admin/", admin.site.urls),
@@ -16,6 +16,7 @@ urlpatterns = [
     path("Mailreadtoken/",MailReadApi.as_view(),name="getmailtoken"),
     path("mailread/",MailRead.as_view(),name="mailread"),
     path("mailreadfromdb/",MailFromDb.as_view(),name="mailfromdb"),
+    path("mailarchived/",MailArchived.as_view(),name="mail-archived"),
     path("composemail/",ComposeMail.as_view(),name="ComposeMail"),
     path("refreshtoken/",TokenRefresh.as_view(),name="refreshtoken"),
     # path("emailfromdb/",MailFromDataBase.as_view(),name="emailfromdb")

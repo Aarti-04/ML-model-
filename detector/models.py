@@ -34,6 +34,7 @@ class EmailMessageModel(models.Model):
     recipient=models.CharField(default="")
     snippet=models.TextField(default="")
     spam=models.BooleanField(default=False)
+    is_archived=models.BooleanField(default=False)
     objects=models.Manager()
 
 
