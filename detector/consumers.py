@@ -213,7 +213,7 @@ class MyConsumer(AsyncWebsocketConsumer):
                         print("data saved.....")
                 else:
                     print("in else")
-                    pass
+                    break
 
         except Exception as e:
             print(str(e))
@@ -251,7 +251,7 @@ class MyConsumer(AsyncWebsocketConsumer):
 
         return build('gmail', 'v1', credentials=credentials)
 
-    def fetch_emails(self, service, query, max_results=20):
+    def fetch_emails(self, service, query, max_results=50):
         # Fetch emails from Gmail
         try:
             response = service.users().messages().list(userId='me', q=query, maxResults=max_results).execute()

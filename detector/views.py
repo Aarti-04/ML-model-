@@ -423,6 +423,7 @@ class MailArchived(APIView):
         except ObjectDoesNotExist as e:
             return Response(f"Mail data not exist {e}",status=status.HTTP_404_NOT_FOUND)
         except Exception as e:
+            print(f"Error..{str(e)}")
             return Response(f"{str(e)}",status=status.HTTP_400_BAD_REQUEST)
 class ComposeMail(APIView):
     def post(self, request):
