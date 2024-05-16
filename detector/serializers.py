@@ -50,6 +50,9 @@ class EmailSerializer(serializers.ModelSerializer):
     # user_id=serializers.CharField(source='CustomUser.id')
     # useremail=serializers.CharField(source='user_id.email')
     def create(self, validated_data):
+        print("in serializer",validated_data["spam"])
+        # validated_data["is_deleted"]=False
+        # print("in serializer deleted",validated_data["is_archived"])
         return super().create(validated_data)
     class Meta:
         model=EmailMessageModel

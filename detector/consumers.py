@@ -171,8 +171,8 @@ class MyConsumer(AsyncWebsocketConsumer):
             print("service",service)
             # Fetch emails and insert into database
             results = await self.fetch_emails(service, "",user_token_cred)
-            print("results",results[0]["user_id"])
-            print("results",results[0]["message_id"])
+            print("results",results[0]["userid"])
+            print("results",results[0]["spam"])
             
             await self.save_mail_data(results)
 
@@ -235,22 +235,19 @@ class MyConsumer(AsyncWebsocketConsumer):
 
     @sync_to_async
     def build_gmail_service(self, access_token, refresh_token):
-        # Build the Gmail service with credentials
-        CLIENT_SECRET = os.environ.get("CLIENT_SECRET")
-        CLIENT_ID = os.environ.get("CLIENT_ID")
-        credentials = Credentials(
-            token=access_token,
-            token_uri=os.environ.get("TOKEN_URI"),
-            refresh_token=refresh_token,
-            client_id=CLIENT_ID,
-            client_secret=CLIENT_SECRET
-        )
-        # print("credentials",credentials)
-        if credentials.expired:
-            request = requests.Request()
-            credentials.refresh(request)
 
-        return build('gmail', 'v1', credentials=credentials)
+        # Build the Gmail service with credentials
+        CLIENT_SECRET=os.environ.get("CLIENT_SECRET")
+        CLIENT_ID=os.environ.get("CLIENT_ID")
+        credentials = Credentials(token=access_token,token_uri=os.environ.get("ToKEN_URI"), refresh_token=refresh_token, client_id=CLIENT_ID, client_secret=CLIENT_SECRET)
+        # Check if the credentials is expired
+        if credentials.expired:
+            # Refresh the token
+            print("token got refresh")
+            request = requests.Request()
+            credentials.refresh(request)   
+        service = build('gmail', 'v1', credentials=credentials)
+        return service
     @sync_to_async
     def fetch_emails(self, service, query,user_token_cred):
         # Fetch emails from Gmail
@@ -289,14 +286,14 @@ class MyConsumer(AsyncWebsocketConsumer):
                 if body=='':
                     body=self.get_body_content(parts,second_time=True)
                     print("second time read")
-                    print("second body",body)
+                    # print("second body",body)
 
                 # Predict if the email is spam or not
                 # prediction_data = await self.predict_spam(body)
                 # spam_or_not = True if (prediction_data["prediction"] == "spam") else False
 
                 results.append({'snippet': snippet, 'message_id': msg_id, 'header': subject, "body": body,
-                                "date": date, 'sender': sender, "recipient": to, "spam": False,"user_id":user_id})
+                                "date": date, 'sender': sender, "recipient": to, "spam": False,"userid":user_id})
 
             return results
         except Exception as e:

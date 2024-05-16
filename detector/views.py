@@ -241,7 +241,7 @@ class MailFromDb(generics.ListCreateAPIView):
     # By default, if no ordering is provided, order by timestamp in descending order
     ordering = ['-date']
     def get_queryset(self):
-        queryset = EmailMessageModel.objects.all().order_by("-date")
+        queryset = EmailMessageModel.objects.all().filter(is_deleted=False).order_by("-date")
         query_type = self.request.query_params.get('query_type')  # Assuming 'query_type' is the query parameter to specify sent or inbox
         if query_type == 'sent':
             queryset = queryset.filter(sender=self.request.user)  # Filter emails sent by the authenticated user
@@ -268,7 +268,7 @@ class MailFromDb(generics.ListCreateAPIView):
             data = {'mail_body': mail_body}
             json_body=json.dumps(data)
             # Adjust this according to the API's requirements
-            response = requests.post(prediction_api_url, data=json_body,headers={'Content-Type': 'application/json'})
+            response = requests.post(prediction_api_url, data=json_body,headers={'Content-Type': 'application/json'},timeout=20)
             print(response.text)
             
             # Modify 'spam' field based on prediction
@@ -299,7 +299,7 @@ class MailFromDb(generics.ListCreateAPIView):
                 # If prediction API fails, you can handle it accordingly
                 # For example, log the error or skip this email
                 pass
-
+        
         return self.get_paginated_response(processed_emails)
 
 
@@ -556,7 +556,7 @@ class Predict(APIView):
         # print(data)
         # Decode the bytes to a string
         message_data=json.loads(data)
-        print(message_data)
+        # print(message_data)
         message_body=message_data["mail_body"]
         # return Response("predict")
         #preprocess data

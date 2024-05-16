@@ -26,7 +26,7 @@ class TokenModel(models.Model):
     token_manager=TokenManager()
 class EmailMessageModel(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    user_id=models.ForeignKey(CustomUser,on_delete=models.CASCADE)
+    userid=models.ForeignKey(CustomUser,on_delete=models.CASCADE)
     message_id=models.CharField(default=None,unique=True)
     header=models.CharField(max_length=255,default="")
     body=models.TextField(default="",blank=True)
@@ -36,7 +36,7 @@ class EmailMessageModel(models.Model):
     snippet=models.TextField(default="")
     spam=models.BooleanField(default=False)
     is_archived=models.BooleanField(default=False)
-    is_deleted=models.BooleanField(default=False)
+    is_deleted=models.BooleanField(default=False,blank=True)
     objects=models.Manager()
 
 
