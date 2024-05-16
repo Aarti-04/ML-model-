@@ -211,6 +211,21 @@ class TokenRefresh(TokenRefreshView):
             return Response({'error': str(e)})
 
 
+class MailDeleteDb(APIView):
+    permission_classes=[IsAuthenticated]
+    def delete(self,request):
+        try:
+            message_id = request.query_params.get('message_id')  # Assuming 'query_type' is the query parameter to specify sent or inbox
+            message_object = EmailMessageModel.objects.get(id=message_id)
+            if(message_object):
+                setattr(message_object,"is_deleted",True)
+                message_object.save()
+                return Response("Email deleted successfully",status=status.HTTP_200_OK)
+            else:
+                return Response("Mail not exsist",status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            return Response(f"Error {str(e)}",status=status.HTTP_500_INTERNAL_SERVER_ERROR)            
+    
 class MailFromDb(generics.ListCreateAPIView):
     # queryset=EmailMessageModel.objects.all()
     serializer_class=EmailSerializer
@@ -235,7 +250,58 @@ class MailFromDb(generics.ListCreateAPIView):
         elif query_type=="spam":
             queryset = queryset.filter(spam=True) 
              # Filter emails received by the authenticated user
+        elif query_type=="archive":
+            queryset = queryset.filter(is_archived=True) 
+        # print("queryset",queryset)
         return queryset
+    def list(self, request, *args, **kwargs):
+        queryset = self.get_queryset()
+        processed_emails = []
+
+        for email in queryset:
+            # Fetch mail body
+            mail_body = email.body  # Assuming you have a field named 'body' in your EmailMessageModel
+            
+            # Send request to prediction API
+            prediction_api_url = 'http://127.0.0.1:8000/api/predict/'
+            data = {'mail_body': mail_body}
+            json_body=json.dumps(data)
+            # Adjust this according to the API's requirements
+            response = requests.post(prediction_api_url, data=json_body,headers={'Content-Type': 'application/json'})
+            print(response.text)
+            
+            # Modify 'spam' field based on prediction
+            if response.status_code == 200:
+                prediction_result = response.json()
+                is_spam = prediction_result['is_spam']  # Assuming the API returns a field 'is_spam'
+                email.spam = is_spam
+                email.save()
+
+                processed_data = {
+                    'id':email.id,
+                    # 'user_id':email.user_id,
+                    'message_id':email.message_id,
+                    'header': email.header,
+                    'body':email.body,
+                    'date':email.date,
+                    'sender': email.sender,
+                    'recipient': email.recipient,
+                    'snippet': email.snippet,
+                    'spam': is_spam,
+                    'is_archived':email.is_archived,
+                    'is_deleted':email.is_deleted
+                    # Add more fields as needed
+                }
+                processed_emails.append(processed_data)
+            else:
+                print("predict failed")
+                # If prediction API fails, you can handle it accordingly
+                # For example, log the error or skip this email
+                pass
+
+        return Response(processed_emails, status=status.HTTP_200_OK)
+
+
 
 class MailReadApi(APIView):
     def get(self,request):
@@ -485,13 +551,15 @@ class Predict(APIView):
         # print("processed body",body)
         return body
     def post(self,request):
-        data = request.body
+        data = request.body.decode('utf-8')
         # print(data)
         # Decode the bytes to a string
-        message = data.decode('utf-8')
-        # print(message)
+        message_data=json.loads(data)
+        print(message_data)
+        message_body=message_data["mail_body"]
+        # return Response("predict")
         #preprocess data
-        cleaned_body = self.preprocess_email_body(message)
+        cleaned_body = self.preprocess_email_body(message_body)
         # Load the saved model and vectorizer     
         model_path = os.path.join(os.path.dirname(__file__), 'spam_detector_model.pkl')
         vectorizer_path = os.path.join(os.path.dirname(__file__), 'count_vectorizer.pkl')
@@ -504,4 +572,8 @@ class Predict(APIView):
         message_vector = count_vectorizer.transform([cleaned_body])
          # Make a prediction
         prediction = clf.predict(message_vector)
-        return Response({'prediction': prediction[0]},status=status.HTTP_200_OK)
+        print("prediction",prediction[0])
+        if(prediction[0]=="spam"):
+            return Response({"is_spam": True},status=status.HTTP_200_OK)
+        else:
+            return Response({'is_spam': False},status=status.HTTP_200_OK)

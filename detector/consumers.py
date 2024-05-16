@@ -129,7 +129,7 @@ import base64
 import re
 import httpx
 import asyncio
-from .models import TokenModel,EmailMessageModel
+from .models import TokenModel,EmailMessageModel,CustomUser
 from .serializers import EmailSerializer
 EMAIL_PATTERN = re.compile(r'<([^<>]+)>')
 import os
@@ -140,10 +140,10 @@ from google.auth.transport import requests
 class MyConsumer(AsyncWebsocketConsumer):
     async def connect(self):
         await self.accept()
-        print("called start_reading_mail")
         query_params = self.scope["query_string"].decode()
         parsed_query_params = parse_qs(query_params)
         access_token = parsed_query_params.get("access_token", [None])[0]
+        print("called start_reading_mail")
         await self.start_reading_mail(access_token)
     async def disconnect(self, close_code):
         print("WebSocket disconnected")
@@ -151,7 +151,7 @@ class MyConsumer(AsyncWebsocketConsumer):
     async def start_reading_mail(self,access_token):
         while True:
             await self.read_and_insert_mail(access_token)
-            print("inserted first 10")
+            print("Record inserted")
             await asyncio.sleep(60)  # Wait for 1 minute before repeating
 
     async def read_and_insert_mail(self,access_token):
@@ -170,8 +170,9 @@ class MyConsumer(AsyncWebsocketConsumer):
             service = await self.build_gmail_service(access_token, refresh_token)
             print("service",service)
             # Fetch emails and insert into database
-            results =  self.fetch_emails(service, "")
-            print("results",results)
+            results = await self.fetch_emails(service, "",user_token_cred)
+            print("results",results[0]["user_id"])
+            print("results",results[0]["message_id"])
             
             await self.save_mail_data(results)
 
@@ -229,7 +230,7 @@ class MyConsumer(AsyncWebsocketConsumer):
         processed_mail_data["recipient"] = recipient_email_matched.group(1) if recipient_email_matched else data["recipient"].strip()
         sender_email_matched = re.search(EMAIL_PATTERN, data["sender"])
         processed_mail_data["sender"] = sender_email_matched.group(1) if sender_email_matched else data["sender"].strip()
-        print("processed_mail_data",processed_mail_data)
+        # print("processed_mail_data",processed_mail_data)
         return processed_mail_data
 
     @sync_to_async
@@ -244,22 +245,31 @@ class MyConsumer(AsyncWebsocketConsumer):
             client_id=CLIENT_ID,
             client_secret=CLIENT_SECRET
         )
-        print("credentials",credentials)
+        # print("credentials",credentials)
         if credentials.expired:
             request = requests.Request()
             credentials.refresh(request)
 
         return build('gmail', 'v1', credentials=credentials)
-
-    def fetch_emails(self, service, query, max_results=50):
+    @sync_to_async
+    def fetch_emails(self, service, query,user_token_cred):
         # Fetch emails from Gmail
         try:
+            user_object=CustomUser.objects.get(email=user_token_cred.userid)
+            if(user_object.is_first_login):
+                max_results=50
+            else:
+                max_results=10
+            print("max_results",max_results)
             response = service.users().messages().list(userId='me', q=query, maxResults=max_results).execute()
             messages = response.get('messages', [])
-            print("messages",messages)
+            if(messages):
+                print("messages found")
+            else:
+                print("No messages found.")
             results = []
-
             for message in messages[:max_results]:
+                user_id=user_object.id
                 msg_id = message['id']
                 full_message = service.users().messages().get(userId='me', id=msg_id).execute()
                 payload = full_message['payload']
@@ -273,7 +283,7 @@ class MyConsumer(AsyncWebsocketConsumer):
                 # print("payload parts...",parts)
                 body = self.get_body_content(parts)
                 # body="<p>Hello good morning</p>"
-                print("first body",body)
+                print("first body")
                 if body=='':
                     body=self.get_body_content(parts,second_time=True)
                     print("second time read")
@@ -284,7 +294,7 @@ class MyConsumer(AsyncWebsocketConsumer):
                 # spam_or_not = True if (prediction_data["prediction"] == "spam") else False
 
                 results.append({'snippet': snippet, 'message_id': msg_id, 'header': subject, "body": body,
-                                "date": date, 'sender': sender, "recipient": to, "spam": False})
+                                "date": date, 'sender': sender, "recipient": to, "spam": False,"user_id":user_id})
 
             return results
         except Exception as e:
@@ -298,13 +308,14 @@ class MyConsumer(AsyncWebsocketConsumer):
             if second_time and part.get('mimeType') == 'text/plain':
                 data1 = part['body']['data'] 
                 if data1:
-                    print("data1",data1)
+                    body+=base64.urlsafe_b64decode(data1).decode()
+                    print("data1 returned")
             if part.get('mimeType') == 'text/html':
                 data = part['body']['data']
                 if data:
-                    body=base64.urlsafe_b64decode(data).decode()
+                    body+=base64.urlsafe_b64decode(data).decode()
                 else:
-                    body=""
-        print("body data",body)
+                    body+=""
+        # print("body data",body)
         return body
         # Predict if the email

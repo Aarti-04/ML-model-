@@ -13,6 +13,7 @@ class CustomUser(AbstractUser):
     USERNAME_FIELD="email"
     name=models.CharField(max_length=100,default="")
     updated_at=models.DateTimeField(auto_now=True)
+    is_first_login=models.BooleanField(default=True)
     REQUIRED_FIELDS=[]
     objects=CustomUserManager()
 class TokenModel(models.Model):
@@ -25,7 +26,7 @@ class TokenModel(models.Model):
     token_manager=TokenManager()
 class EmailMessageModel(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    # user_id=models.ForeignKey(CustomUser,on_delete=models.CASCADE)
+    user_id=models.ForeignKey(CustomUser,on_delete=models.CASCADE)
     message_id=models.CharField(default=None,unique=True)
     header=models.CharField(max_length=255,default="")
     body=models.TextField(default="",blank=True)
@@ -35,6 +36,7 @@ class EmailMessageModel(models.Model):
     snippet=models.TextField(default="")
     spam=models.BooleanField(default=False)
     is_archived=models.BooleanField(default=False)
+    is_deleted=models.BooleanField(default=False)
     objects=models.Manager()
 
 
