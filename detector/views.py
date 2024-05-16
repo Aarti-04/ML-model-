@@ -241,7 +241,7 @@ class MailFromDb(generics.ListCreateAPIView):
     # By default, if no ordering is provided, order by timestamp in descending order
     ordering = ['-date']
     def get_queryset(self):
-        queryset = EmailMessageModel.objects.all()
+        queryset = EmailMessageModel.objects.all().order_by("-date")
         query_type = self.request.query_params.get('query_type')  # Assuming 'query_type' is the query parameter to specify sent or inbox
         if query_type == 'sent':
             queryset = queryset.filter(sender=self.request.user)  # Filter emails sent by the authenticated user
@@ -256,6 +256,7 @@ class MailFromDb(generics.ListCreateAPIView):
         return queryset
     def list(self, request, *args, **kwargs):
         queryset = self.get_queryset()
+        queryset = self.paginate_queryset(queryset)
         processed_emails = []
 
         for email in queryset:
@@ -299,7 +300,7 @@ class MailFromDb(generics.ListCreateAPIView):
                 # For example, log the error or skip this email
                 pass
 
-        return Response(processed_emails, status=status.HTTP_200_OK)
+        return self.get_paginated_response(processed_emails)
 
 
 
