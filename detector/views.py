@@ -39,6 +39,7 @@ import requests
 from rest_framework.serializers import ValidationError
 from rest_framework.pagination import PageNumberPagination
 from bs4 import BeautifulSoup
+from .gmail_service import get_gmail_service
 from .serializers import CustomeUserSerializer,EmailSerializer
 import random
 import string
@@ -74,6 +75,7 @@ from rest_framework.filters import SearchFilter,OrderingFilter
 from datetime import datetime
 import asyncio
 from django.core.exceptions import ObjectDoesNotExist
+
 load_dotenv()
 
 
@@ -240,14 +242,14 @@ class MailFromDb(generics.ListCreateAPIView):
     # By default, if no ordering is provided, order by timestamp in descending order
     ordering = ['-date']
     def get_queryset(self):
-        queryset = EmailMessageModel.objects.all().filter(is_deleted=False).order_by("-date")
+        queryset = EmailMessageModel.objects.all().order_by("-date")
         query_type = self.request.query_params.get('query_type')  # Assuming 'query_type' is the query parameter to specify sent or inbox
         if query_type == 'sent':
-            queryset = queryset.filter(sender=self.request.user)  # Filter emails sent by the authenticated user
+            queryset = queryset.filter(sender=self.request.user,is_archived=False,is_deleted=False)  # Filter emails sent by the authenticated user
         elif query_type == 'inbox':
-            queryset = queryset.filter(recipient=self.request.user) 
+            queryset = queryset.filter(recipient=self.request.user,is_archived=False,is_deleted=False) 
         elif query_type=="spam":
-            queryset = queryset.filter(spam=True) 
+            queryset = queryset.filter(spam=True,is_archived=False,is_deleted=False) 
              # Filter emails received by the authenticated user
         elif query_type=="archive":
             queryset = queryset.filter(is_archived=True) 
@@ -265,9 +267,9 @@ class MailFromDb(generics.ListCreateAPIView):
             # Send request to prediction API
             prediction_api_url = 'http://127.0.0.1:8000/api/predict/'
             data = {'mail_body': mail_body}
-            json_body=json.dumps(data)
+            json_mail_body=json.dumps(data)
             # Adjust this according to the API's requirements
-            response = requests.post(prediction_api_url, data=json_body,headers={'Content-Type': 'application/json'},timeout=20)
+            response = requests.post(prediction_api_url, data=json_mail_body,headers={'Content-Type': 'application/json'},timeout=20)
             print(response.text)
             
             # Modify 'spam' field based on prediction
@@ -492,51 +494,54 @@ class MailArchived(APIView):
             print(f"Error..{str(e)}")
             return Response(f"{str(e)}",status=status.HTTP_400_BAD_REQUEST)
 class ComposeMail(APIView):
+    permission_classes=[IsAuthenticated]
+    def gmail_compose(self,mail_subject, email_recipient, mail_body):
+        message = {
+            'raw': base64.urlsafe_b64encode(
+                f'MIME-Version: 1.0\n'
+                f'Content-Type: text/html; charset="UTF-8"\n'
+                f"From: itbase.tv@gmail.com\n"
+                f"To: {email_recipient}\n"
+                f"Subject: {mail_subject}\n\n"
+                f"{mail_body}"
+                .encode("utf-8")
+            ).decode("utf-8")
+        }
+        return message
+    def gmail_send(self,service, message):
+        # Send the email
+        # service = build('gmail', 'v1', credentials=creds)
+        try:
+            service.users().messages().send(userId='me', body=message).execute()
+            print('Email sent successfully.')
+            return True
+        except Exception as e:
+            print('An error occurred while sending the email:', str(e))
+            return False
+
     def post(self, request):
         try:
-            data = request.body
-            data_string = data.decode('utf-8')
-            credentials = json.loads(data_string)
-            credentials["client_secret"]=os.environ.get("CLIENT_SECRET")
-            credentials["client_id"]=os.environ.get("CLIENT_ID")
-
-            # Initialize credentials using access token
-            creds = Credentials(token=credentials["access_token"])
-            scopes = ['https://www.googleapis.com/auth/gmail.compose']
-            creds1 = Credentials.from_authorized_user_info(credentials, scopes=scopes)
-            print(creds1)
-            # Build Gmail service
-            service = build("gmail", "v1", credentials=creds)
-
-            # Get user's email address
-            user_info = service.users().getProfile(userId='me').execute()
-            user_email = user_info['emailAddress']
-            # return Response(user_email)
-            # Construct the email message
-            message = MIMEMultipart()
-            message['to'] = "sharma.aart.dcs24@vnsgu.ac.in"
-            message['from'] = user_email
-            message['subject'] = "Automated draft"
-
-            # Add email body
-            body = "This is automated draft mail"
-            message.attach(MIMEText(body, 'plain'))
-
-            # Encoded message
-            raw_message = base64.urlsafe_b64encode(message.as_bytes()).decode()
-
-            # Create draft message
-            draft_message = {"message": {"raw": raw_message}}
-            draft = service.users().drafts().create(userId="me", body=draft_message).execute()
-
-            return Response({"message": "Mail draft created successfully"})
-        
-        except DefaultCredentialsError:
-            return Response({"error": "Authentication error. Ensure you have valid credentials."})
-        
+            data = request.body.decode('utf-8')
+            print(data)
+            # Decode the bytes to a string
+            message_data=json.loads(data)
+            if(not message_data):
+                return Response("body can't be empty",status=status.HTTP_400_BAD_REQUEST)
+            header=message_data.get("header")
+            to=message_data.get("recipient")
+            mail_body=message_data.get("body")
+            gmail_service=get_gmail_service(request.user)
+            # header="Test Mail from django"
+            # to="sharma.aarti.dcs24@vnsgu.ac.in"
+            # mail_body="<html><h1>hello user how are you doing?</h1><br><br><h3>you have won 10 lacs case prize please go through bellow link and get complete your process</h3></html>"
+            message_to_send=self.gmail_compose(header,to,mail_body)
+            message_send_or_not=self.gmail_send(gmail_service,message_to_send)
+            if(message_send_or_not):
+                return Response(f"Mail Sent successfully",status=status.HTTP_200_OK)
         except Exception as e:
             print(f"An error occurred: {e}")
-            return Response({"error": "Failed to create mail draft"})
+            return Response({"error": "Failed to create mail"})
+
 class Predict(APIView):
     def preprocess_email_body(self,body):
         # print("pre body",body)

@@ -28,7 +28,7 @@ class EmailMessageModel(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     userid=models.ForeignKey(CustomUser,on_delete=models.CASCADE)
     message_id=models.CharField(default=None,unique=True)
-    header=models.CharField(max_length=255,default="")
+    header=models.CharField(max_length=255,default="",blank=True)
     body=models.TextField(default="",blank=True)
     date=models.DateTimeField()
     sender=models.CharField(max_length=255,default="")

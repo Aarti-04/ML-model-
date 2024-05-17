@@ -125,6 +125,7 @@ from asgiref.sync import sync_to_async
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 from datetime import datetime
+from dateutil import parser
 import base64
 import re
 import httpx
@@ -137,6 +138,7 @@ import jwt
 from urllib.parse import parse_qs
 from google.auth.transport import requests
 
+
 class MyConsumer(AsyncWebsocketConsumer):
     async def connect(self):
         await self.accept()
@@ -144,16 +146,29 @@ class MyConsumer(AsyncWebsocketConsumer):
         parsed_query_params = parse_qs(query_params)
         access_token = parsed_query_params.get("access_token", [None])[0]
         print("called start_reading_mail")
-        await self.start_reading_mail(access_token)
+        self.reading_mail_task = asyncio.create_task(self.start_reading_mail(access_token))
+
+        # await self.start_reading_mail(access_token)
     async def disconnect(self, close_code):
         print("WebSocket disconnected")
+        if hasattr(self, 'reading_mail_task'):
+            self.reading_mail_task.cancel()
+            try:
+                await self.reading_mail_task
+            except asyncio.CancelledError:
+                print("Reading mail task cancelled")
         await self.close()
+       
+        # raise StopConsumer()
     async def start_reading_mail(self,access_token):
-        while True:
-            await self.read_and_insert_mail(access_token)
-            print("Record inserted")
-            await asyncio.sleep(60)  # Wait for 1 minute before repeating
-
+        try:
+            while True:
+                await self.read_and_insert_mail(access_token)
+                # print("Record inserted")
+                await asyncio.sleep(60)  # Wait for 1 minute before repeating
+        except asyncio.CancelledError:
+            print("start_reading_mail cancelled")
+            
     async def read_and_insert_mail(self,access_token):
         try:
             # Get the user's credentials from the database
@@ -225,7 +240,8 @@ class MyConsumer(AsyncWebsocketConsumer):
         # print("data.......",data)
         # return
         processed_mail_data = data
-        processed_mail_data["date"] = datetime.strptime(data["date"].replace(' (UTC)', ''), '%a, %d %b %Y %H:%M:%S %z')
+        # processed_mail_data["date"] = datetime.strptime(data["date"].replace(' (UTC)', ''), '%a, %d %b %Y %H:%M:%S %z')
+        processed_mail_data["date"]=parser.parse(data["date"])
         recipient_email_matched = re.search(EMAIL_PATTERN, data["recipient"])
         processed_mail_data["recipient"] = recipient_email_matched.group(1) if recipient_email_matched else data["recipient"].strip()
         sender_email_matched = re.search(EMAIL_PATTERN, data["sender"])
@@ -254,7 +270,7 @@ class MyConsumer(AsyncWebsocketConsumer):
         try:
             user_object=CustomUser.objects.get(email=user_token_cred.userid)
             if(user_object.is_first_login):
-                max_results=30
+                max_results=60
                 setattr(user_object,"is_first_login",False)
                 user_object.save()
             else:
@@ -278,16 +294,23 @@ class MyConsumer(AsyncWebsocketConsumer):
                 to = next((header['value'] for header in headers if header['name'] == 'To'), None)
                 subject = next((header['value'] for header in headers if header['name'] == 'Subject'), None)
                 date = next((header['value'] for header in headers if header['name'] == 'Date'), None)
-                parts = payload.get('parts', [])
-                # print("payload parts...",parts)
-                body = self.get_body_content(parts)
-                # body="<p>Hello good morning</p>"
-                print("first body")
-                if body=='':
-                    body=self.get_body_content(parts,second_time=True)
-                    print("second time read")
-                    # print("second body",body)
+                # print("payload...",payload)
+                
+                body=payload['body']
 
+                # print("payload parts...",parts)
+                print("first body")
+                body = self.get_body_content(body)
+                if(body==''):
+                    parts = payload.get('parts', [])
+                    body=self.get_body_content1(parts)
+                # body="<p>Hello good morning</p>"
+               
+                if body=='':
+                    print("still  data not found")
+                #     body=self.get_body_content(parts,second_time=True)
+                #     print("second time read")
+                    # print("second body",body)
                 # Predict if the email is spam or not
                 # prediction_data = await self.predict_spam(body)
                 # spam_or_not = True if (prediction_data["prediction"] == "spam") else False
@@ -298,45 +321,51 @@ class MyConsumer(AsyncWebsocketConsumer):
             return results
         except Exception as e:
             print(f"Error fetching emails: {e}")
-    def get_body_content(self, parts,second_time=False):
+    def get_body_content(self, parts):
         # print("parts......",parts)
-        # body=''
-        # if not parts:
-        #     return body
-        # for part in parts:
-        #     # if second_time and part.get('mimeType') == 'text/plain':
-        #     #     data1 = part['body']['data'] 
-        #     #     if data1:
-        #     #         body+=base64.urlsafe_b64decode(data1).decode()
-        #     #         print("data1 returned")
-        #     if part.get('mimeType') == 'text/html':
-        #         data = part['body']['data']
-        #         if data:
-        #             if(data):
-        #                 print("data1 have body")
-        #             body+=base64.urlsafe_b64decode(data).decode()
-        #         else:
-        #             body+=""
-        # # print("body data",body)
-        # return body
-        # Predict if the email
-        body = ''
+        body=''
+        if "data" in parts:
+            body=base64.urlsafe_b64decode(parts["data"]).decode()
+            print("get_body_content returned")
+        return body
+    def get_body_content1(self, parts):
+        print("get_body_content1... returned")
+        body=''
         if not parts:
             return body
         for part in parts:
-            if 'body' in part:
-                if 'data' in part['body']:
-                    data = part['body']['data']
-                    if data:
-                        body += base64.urlsafe_b64decode(data).decode()
-            elif 'parts' in part:
-                body += self.get_body_content(part['parts'], second_time)
-        html_pattern = re.compile(r'(<html[^>]*>.*?</html>|<!DOCTYPE html>.*?</html>)', re.DOTALL)
-        match = html_pattern.search(body)
-        if match:
-            return match.group(0)
-        else:
-            return None
+        #     # if second_time and part.get('mimeType') == 'text/plain':
+        # #     #     data1 = part['body']['data'] 
+        # #     #     if data1:
+        # #     #         body+=base64.urlsafe_b64decode(data1).decode()
+        # #     #         print("data1 returned")
+            
+            if part.get('mimeType') == 'text/html':
+                print(part.get('mimeType'))
+                data = part['body']['data']
+        #         print("part...",data)
+                if data:
+                    body+=base64.urlsafe_b64decode(data).decode()
+                    print("data1 have body")
+        return body
+        # Predict if the email
+        # body = ''
+        # if not parts:
+        #     return body
+        # for part in parts:
+        #     if 'body' in part:
+        #         if 'data' in part['body']:
+        #             data = part['body']['data']
+        #             if data:
+        #                 body += base64.urlsafe_b64decode(data).decode()
+        #     elif 'parts' in part:
+        #         body += self.get_body_content(part['parts'], second_time)
+        # html_pattern = re.compile(r'(<html[^>]*>.*?</html>|<!DOCTYPE html>.*?</html>)', re.DOTALL)
+        # match = html_pattern.search(body)
+        # if match:
+        #     return match.group(0)
+        # else:
+        #     return ''
 
             # return body
 

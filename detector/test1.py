@@ -6,15 +6,15 @@ from googleapiclient.errors import HttpError
 import base64 
 def gmail_credentials():
     # Set up OAuth2 credentials
-    try:
-        creds = Credentials.from_authorized_user_file('token.json')
-    except FileNotFoundError: #-- token.json file does NOT exist --#
+    # try:
+        # creds = Credentials.from_authorized_user_file('token.json')
+    # except FileNotFoundError: #-- token.json file does NOT exist --#
         #-- generate token by authorizing via browser (1st time only, I hope so :D) --#
-        flow = InstalledAppFlow.from_client_secrets_file(
-            'credentials.json',  #credentials JSON file
-            ['https://www.googleapis.com/auth/gmail.send',"https://www.googleapis.com/auth/gmail.readonly","https://mail.google.com/"]
-            )
-        creds = flow.run_local_server(port=8000)
+    flow = InstalledAppFlow.from_client_secrets_file(
+        'credentials.json',  #credentials JSON file
+        ['https://www.googleapis.com/auth/gmail.send',"https://www.googleapis.com/auth/gmail.readonly","https://mail.google.com/"]
+        )
+    creds = flow.run_local_server(port=8000)
 
     #-- token.json exists --#    
     if creds and creds.valid:
@@ -31,19 +31,6 @@ def gmail_credentials():
     # return the creds
 
     return creds
-def gmail_compose(mail_subject, email_recipient, mail_body):
-    message = {
-        'raw': base64.urlsafe_b64encode(
-            f'MIME-Version: 1.0\n'
-            f'Content-Type: text/html; charset="UTF-8"\n'
-            f"From: itbase.tv@gmail.com\n"
-            f"To: {email_recipient}\n"
-            f"Subject: {mail_subject}\n\n"
-            f"{mail_body}"
-            .encode("utf-8")
-        ).decode("utf-8")
-    }
-    return message
 def gmail_compose(mail_subject, email_recipient, mail_body):
     message = {
         'raw': base64.urlsafe_b64encode(
