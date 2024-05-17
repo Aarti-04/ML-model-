@@ -12,7 +12,7 @@ def gmail_credentials():
         #-- generate token by authorizing via browser (1st time only, I hope so :D) --#
         flow = InstalledAppFlow.from_client_secrets_file(
             'credentials.json',  #credentials JSON file
-            ['https://www.googleapis.com/auth/gmail.send',"https://www.googleapis.com/auth/gmail.readonly"]
+            ['https://www.googleapis.com/auth/gmail.send',"https://www.googleapis.com/auth/gmail.readonly","https://mail.google.com/"]
             )
         creds = flow.run_local_server(port=8000)
 
