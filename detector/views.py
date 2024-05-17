@@ -54,7 +54,6 @@ from googleapiclient.errors import HttpError
 from rest_framework.views import APIView
 from rest_framework import generics
 from rest_framework.response import Response
-from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 from google.auth import default
 from google.auth.exceptions import DefaultCredentialsError

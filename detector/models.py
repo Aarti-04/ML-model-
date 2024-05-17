@@ -33,7 +33,7 @@ class EmailMessageModel(models.Model):
     date=models.DateTimeField()
     sender=models.CharField(max_length=255,default="")
     recipient=models.CharField(default="")
-    snippet=models.TextField(default="")
+    snippet=models.TextField(default="",blank=True)
     spam=models.BooleanField(default=False)
     is_archived=models.BooleanField(default=False)
     is_deleted=models.BooleanField(default=False,blank=True)

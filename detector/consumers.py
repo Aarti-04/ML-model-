@@ -254,7 +254,7 @@ class MyConsumer(AsyncWebsocketConsumer):
         try:
             user_object=CustomUser.objects.get(email=user_token_cred.userid)
             if(user_object.is_first_login):
-                max_results=50
+                max_results=30
                 setattr(user_object,"is_first_login",False)
                 user_object.save()
             else:
@@ -300,21 +300,43 @@ class MyConsumer(AsyncWebsocketConsumer):
             print(f"Error fetching emails: {e}")
     def get_body_content(self, parts,second_time=False):
         # print("parts......",parts)
-        body=''
+        # body=''
+        # if not parts:
+        #     return body
+        # for part in parts:
+        #     # if second_time and part.get('mimeType') == 'text/plain':
+        #     #     data1 = part['body']['data'] 
+        #     #     if data1:
+        #     #         body+=base64.urlsafe_b64decode(data1).decode()
+        #     #         print("data1 returned")
+        #     if part.get('mimeType') == 'text/html':
+        #         data = part['body']['data']
+        #         if data:
+        #             if(data):
+        #                 print("data1 have body")
+        #             body+=base64.urlsafe_b64decode(data).decode()
+        #         else:
+        #             body+=""
+        # # print("body data",body)
+        # return body
+        # Predict if the email
+        body = ''
         if not parts:
             return body
         for part in parts:
-            if second_time and part.get('mimeType') == 'text/plain':
-                data1 = part['body']['data'] 
-                if data1:
-                    body+=base64.urlsafe_b64decode(data1).decode()
-                    print("data1 returned")
-            if part.get('mimeType') == 'text/html':
-                data = part['body']['data']
-                if data:
-                    body+=base64.urlsafe_b64decode(data).decode()
-                else:
-                    body+=""
-        # print("body data",body)
-        return body
-        # Predict if the email
+            if 'body' in part:
+                if 'data' in part['body']:
+                    data = part['body']['data']
+                    if data:
+                        body += base64.urlsafe_b64decode(data).decode()
+            elif 'parts' in part:
+                body += self.get_body_content(part['parts'], second_time)
+        html_pattern = re.compile(r'(<html[^>]*>.*?</html>|<!DOCTYPE html>.*?</html>)', re.DOTALL)
+        match = html_pattern.search(body)
+        if match:
+            return match.group(0)
+        else:
+            return None
+
+            # return body
+
