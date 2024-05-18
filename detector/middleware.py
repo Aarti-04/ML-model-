@@ -49,3 +49,31 @@
 #         print("data",data)
 #         if "error_description" in data:
 #             raise ValidationError(data["error_description"])
+from django.http import JsonResponse
+from rest_framework.response import Response
+import re
+
+class PredictRequestValidationMiddleware:
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        print("middleware called")
+        if request.path == '/api/composemail/' and request.method == 'POST':
+            data = request.POST
+            sender_email = data.get('recipient')
+            header = data.get('header')
+            body = data.get('body')
+
+            # Check if sender_email, header, and body are not empty
+            if not sender_email or not header or not body:
+                print("error returned")
+                return JsonResponse({'error': 'sender_email, header, and body are required.'})
+            
+            # Validate sender_email format
+            email_regex = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+            if not re.match(email_regex, sender_email):
+                return JsonResponse({'error': 'Invalid sender_email format.'})
+
+        response = self.get_response(request)
+        return response

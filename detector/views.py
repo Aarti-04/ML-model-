@@ -75,6 +75,7 @@ from rest_framework.filters import SearchFilter,OrderingFilter
 from datetime import datetime
 import asyncio
 from django.core.exceptions import ObjectDoesNotExist
+from django.contrib.auth.signals import user_logged_in
 
 load_dotenv()
 
@@ -89,9 +90,11 @@ class LoginUser(APIView):
 
 
 class Logout(APIView):
+    parser_classes=[IsAuthenticated]
     def delete(self,request):
         user=request.user
         print(user)
+        logout(request)
         return Response("logout")
         # user, created =CustomUser.objects.get(email=user_email)
 def get_auth_jwt_token(authenticatedUser):
@@ -139,6 +142,7 @@ class GoogleRegisterView(APIView):
                 jwt_token=get_auth_jwt_token(authenticatedUser)
                 self.saveCredentials(user["email"],google_access_token=google_access_token,google_refresh_token=google_refresh_token,jwt_refresh_token=jwt_token["refresh_token"])
                 login(request,authenticatedUser)
+
                 print("logged in user",authenticatedUser)
                 return Response({"message":"User Registered successfully","access_token":jwt_token["access_token"],"refresh_token":jwt_token["refresh_token"]},status.HTTP_201_CREATED)
             except ValidationError as e:
@@ -157,6 +161,7 @@ class GoogleRegisterView(APIView):
                 res=User_Token_cred.save()
                 print(res)
                 login(request,authenticatedUser)
+                user_logged_in.send(sender=CustomUser,request=request,user=authenticatedUser)
                 return Response({"message":"User Logged in successfully","access_token":jwt_access_token["access_token"],"refresh_token":jwt_refresh_token},status.HTTP_200_OK)
             except Exception as e:
                 print(f"64 Error {str(e)} ")
@@ -242,7 +247,7 @@ class MailFromDb(generics.ListCreateAPIView):
     # By default, if no ordering is provided, order by timestamp in descending order
     ordering = ['-date']
     def get_queryset(self):
-        queryset = EmailMessageModel.objects.all().order_by("-date")
+        queryset = EmailMessageModel.objects.all().filter().order_by("-date")
         query_type = self.request.query_params.get('query_type')  # Assuming 'query_type' is the query parameter to specify sent or inbox
         if query_type == 'sent':
             queryset = queryset.filter(sender=self.request.user,is_archived=False,is_deleted=False)  # Filter emails sent by the authenticated user

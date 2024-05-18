@@ -56,6 +56,7 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    "detector.middleware.PredictRequestValidationMiddleware"
     # "channels.middleware.AsgiMiddleware",
     # "channels.asgi.AsgiMiddleware",
     # "detector.middleware.TokenValidationMiddleware"
