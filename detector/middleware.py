@@ -52,28 +52,68 @@
 from django.http import JsonResponse
 from rest_framework.response import Response
 import re
-
-class PredictRequestValidationMiddleware:
+import json
+from django.http import HttpResponse
+from .exceptions import ValidationError
+from rest_framework.views import status
+class Predict_Email_Request_validationMiddleware:
     def __init__(self, get_response):
         self.get_response = get_response
-
+    def __call__(self, request):
+        print("middleware called")
+        if request.path == '/api/predict/' and request.method == 'POST':
+            data = request.body.decode("utf-8")
+            data=json.loads(data)
+            print("data",data)
+            Email_body = data.get('body')
+            if not Email_body:
+                print("error returned")
+                # return HttpResponse({'error': 'sender_email, header, and body are required.'})
+                # response=HttpResponse(json.dumps({'error': 'email body is required.'}), content_type="application/json")
+                # response.status_code=status.HTTP_400_BAD_REQUEST
+                response = JsonResponse({'error': 'Email body is required.'},status=status.HTTP_400_BAD_REQUEST)
+                return response
+               
+                # raise ValidationError('sender_email, header, and body are required.') 
+                return response
+        response = self.get_response(request)
+        # print("response", response)
+        return response
+           
+        
+class ComposeMail_Request_ValidationMiddleware:
+    def __init__(self, get_response):
+        self.get_response = get_response
+    
     def __call__(self, request):
         print("middleware called")
         if request.path == '/api/composemail/' and request.method == 'POST':
-            data = request.POST
+            data = request.body.decode("utf-8")
+            data=json.loads(data)
+            print("data",data)
             sender_email = data.get('recipient')
             header = data.get('header')
             body = data.get('body')
-
+            print("sender_email",sender_email)
+            print("header",header)
+            print("body",body)
             # Check if sender_email, header, and body are not empty
             if not sender_email or not header or not body:
                 print("error returned")
-                return JsonResponse({'error': 'sender_email, header, and body are required.'})
+                # return Response({'error': 'sender_email, header, and body are required.'})
+                response=HttpResponse(json.dumps({'error': 'sender_email, header, and body are required.'}), content_type="application/json",status=status.HTTP_400_BAD_REQUEST)
+                print("response", response)
+                # raise ValidationError('sender_email, header, and body are required.') 
+                return response
             
             # Validate sender_email format
             email_regex = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
             if not re.match(email_regex, sender_email):
-                return JsonResponse({'error': 'Invalid sender_email format.'})
-
+                print("'error': 'Invalid sender_email format.'")
+                response=HttpResponse(json.dumps({'error': 'Invalid sender_email format.'}), content_type="application/json",status=status.HTTP_406_NOT_ACCEPTABLE)
+                # print("response", response)
+                # return Response({'error': 'Invalid sender_email format.'})
+                # raise ValidationError('Invalid sender_email format.')
+                return response
         response = self.get_response(request)
         return response

@@ -1,10 +1,11 @@
 from django.contrib import admin
 from django.urls import path
-from .views import MailDeleteDb,MailArchived,MailReadApi,MailFromDb,GoogleLoginView,Logout,Predict,GoogleRegisterView,MailRead,ComposeMail,TokenRefresh,LoginUser
+from .views import Train,MailDeleteDb,MailArchived,MailReadApi,MailFromDb,GoogleLoginView,Logout,Predict,GoogleRegisterView,MailRead,ComposeMail,TokenRefresh,LoginUser
 
 urlpatterns = [
     # path("admin/", admin.site.urls),
     path("predict/",Predict.as_view(),name="predict"),
+    path("train/",Train.as_view(),name="train"),
     # path("predict/",views.Predict.as_view(),name="predict"),
     # path("register/",RegisterAuthVerify.as_view(),name="register"),
     path("googleregister/",GoogleRegisterView.as_view(),name="GoogleRegisterView"),

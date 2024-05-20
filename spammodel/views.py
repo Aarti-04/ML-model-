@@ -5,6 +5,17 @@ import json
 import re
 import pickle
 import os
+import pandas as pd
+from sklearn.feature_extraction.text import CountVectorizer
+from sklearn.naive_bayes import MultinomialNB
+from sklearn.model_selection import train_test_split,cross_val_score
+from sklearn.metrics import accuracy_score, classification_report
+import pickle
+from sklearn import svm
+# from imblearn.over_sampling import RandomOverSampler
+# from imblearn.under_sampling import RandomUnderSampler
+import numpy as np
+from django.conf import settings
 # Create your views here.
 
 class Predict(APIView):
@@ -21,15 +32,15 @@ class Predict(APIView):
     # print("processed body",body)
     return body
   def post(self,request):
-    data = request.body
+    data = request.body.decode('utf-8')
     # print(data)
     # Decode the bytes to a string
-    message_data = data.decode('utf-8')
-    message=json.loads(message_data)
-    # print("message",message["message"])
+    message_data=json.loads(data)
+    # print(message_data)
+    message_body=message_data["body"]
+    # return Response("predict")
     #preprocess data
-    # return Response("hello")
-    cleaned_body = self.preprocess_email_body(message["message"])
+    cleaned_body = self.preprocess_email_body(message_body)
     # Load the saved model and vectorizer     
     model_path = os.path.join(os.path.dirname(__file__), 'spam_detector_model.pkl')
     vectorizer_path = os.path.join(os.path.dirname(__file__), 'count_vectorizer.pkl')
@@ -42,11 +53,17 @@ class Predict(APIView):
     message_vector = count_vectorizer.transform([cleaned_body])
       # Make a prediction
     prediction = clf.predict(message_vector)
-    return Response({'prediction': prediction[0]},status=status.HTTP_200_OK)
+    print("prediction",prediction[0])
+    if(prediction[0]=="spam"):
+        return Response({"is_spam": True},status=status.HTTP_200_OK)
+    else:
+        return Response({'is_spam': False},status=status.HTTP_200_OK)
 
 class Train(APIView):
   def post(self,request):
-    data = pd.read_csv('SMSSpamCollection', sep='\t', names=['label', 'message'])
+    file_path = os.path.join(settings.BASE_DIR, 'spammodel', 'SMSSpamCollection')
+
+    data = pd.read_csv(file_path, sep='\t', names=['label', 'message'])
      # Feature extraction
     print(data.head(100))
     count_vectorizer = CountVectorizer(stop_words='english')
@@ -75,8 +92,20 @@ class Train(APIView):
 
     # # Save the model and vectorizer
 
-    with open('spam_detector_model.pkl', 'wb') as model_file:
+    # with open('spam_detector_model.pkl', 'wb') as model_file:
+    #     print("in spam_detector_model")
+    #     pickle.dump(clf, model_file)
+    # with open('count_vectorizer.pkl', 'wb') as vectorizer_file:
+    #     pickle.dump(count_vectorizer, vectorizer_file)
+    model_save_path = os.path.join(settings.BASE_DIR, 'spammodel', 'spam_detector_model.pkl')
+    vectorizer_save_path = os.path.join(settings.BASE_DIR, 'spammodel', 'count_vectorizer.pkl')
+    with open(model_save_path, 'wb') as model_file:
+        print("Saving spam_detector_model.pkl")
         pickle.dump(clf, model_file)
-    with open('count_vectorizer.pkl', 'wb') as vectorizer_file:
+
+    with open(vectorizer_save_path, 'wb') as vectorizer_file:
+        print("Saving count_vectorizer.pkl")
         pickle.dump(count_vectorizer, vectorizer_file)
-      
+
+    return Response("Model trained successfully", status=status.HTTP_201_CREATED)
+    return Response("MOdel Trained successfully",status=status.HTTP_201_CREATED)

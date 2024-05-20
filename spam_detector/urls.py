@@ -18,8 +18,10 @@ Including another URLconf
 from django.contrib import admin
 from django.urls import path,include
 import detector
+import spammodel
 urlpatterns = [
     path("admin/", admin.site.urls),
     path("api/",include("detector.urls")),
+    path("model/",include("spammodel.urls"))
     # path("spammodel/")
 ]

@@ -32,7 +32,7 @@ def send_welcome_email(sender, instance, created, **kwargs):
 def send_login_email(sender, request, user, **kwargs):
     print("in signals")
     subject = 'Login Notification'
-    message = f'Hi {user.name},\n\nYou have successfully logged in.'
+    message = f'Hi {user.name},\n\nYou have successfully logged in to spam detector application.'
     from_email = settings.EMAIL_HOST_USER
     recipient_list = [user.email]
     try:

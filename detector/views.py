@@ -76,6 +76,17 @@ from datetime import datetime
 import asyncio
 from django.core.exceptions import ObjectDoesNotExist
 from django.contrib.auth.signals import user_logged_in
+import pandas as pd
+from sklearn.feature_extraction.text import CountVectorizer
+from sklearn.naive_bayes import MultinomialNB
+from sklearn.model_selection import train_test_split,cross_val_score
+from sklearn.metrics import accuracy_score, classification_report
+import pickle
+from sklearn import svm
+# from imblearn.over_sampling import RandomOverSampler
+# from imblearn.under_sampling import RandomUnderSampler
+import numpy as np
+from django.conf import settings
 
 load_dotenv()
 
@@ -270,8 +281,8 @@ class MailFromDb(generics.ListCreateAPIView):
             mail_body = email.body  # Assuming you have a field named 'body' in your EmailMessageModel
             
             # Send request to prediction API
-            prediction_api_url = 'http://127.0.0.1:8000/api/predict/'
-            data = {'mail_body': mail_body}
+            prediction_api_url = 'http://127.0.0.1:8000/model/predict/'
+            data = {'body': mail_body}
             json_mail_body=json.dumps(data)
             # Adjust this according to the API's requirements
             response = requests.post(prediction_api_url, data=json_mail_body,headers={'Content-Type': 'application/json'},timeout=20)
@@ -542,10 +553,10 @@ class ComposeMail(APIView):
             message_to_send=self.gmail_compose(header,to,mail_body)
             message_send_or_not=self.gmail_send(gmail_service,message_to_send)
             if(message_send_or_not):
-                return Response(f"Mail Sent successfully",status=status.HTTP_200_OK)
+                return Response({"success":"Mail Sent successfully"},status=status.HTTP_200_OK)
         except Exception as e:
             print(f"An error occurred: {e}")
-            return Response({"error": "Failed to create mail"})
+            return Response({"error": "Failed to create mail"},status=400)
 
 class Predict(APIView):
     def preprocess_email_body(self,body):
@@ -566,7 +577,7 @@ class Predict(APIView):
         # Decode the bytes to a string
         message_data=json.loads(data)
         # print(message_data)
-        message_body=message_data["mail_body"]
+        message_body=message_data["body"]
         # return Response("predict")
         #preprocess data
         cleaned_body = self.preprocess_email_body(message_body)
@@ -587,3 +598,42 @@ class Predict(APIView):
             return Response({"is_spam": True},status=status.HTTP_200_OK)
         else:
             return Response({'is_spam': False},status=status.HTTP_200_OK)
+class Train(APIView):
+  def post(self,request):
+    file_path = os.path.join(settings.BASE_DIR, 'detector', 'SMSSpamCollection')
+    print(file_path)
+    # return Response("hello")
+    data = pd.read_csv(file_path, sep='\t', names=['label', 'message'])
+     # Feature extraction
+    print(data.head(100))
+    count_vectorizer = CountVectorizer(stop_words='english')
+    
+    x = count_vectorizer.fit_transform(data['message'])
+    print(x)
+
+    y = data['label']
+    # print(X)
+
+
+    #  # Split dataset into training and testing sets
+
+    X_train, X_test, y_train, y_test = train_test_split(x, y, test_size=0.2, random_state=42)
+    # #   # Train the model
+    clf = MultinomialNB()
+    # clf=svm.SVC()
+    clf.fit(X_train, y_train)
+
+    # # Evaluate the model
+    y_pred = clf.predict(X_test)
+    accuracy = accuracy_score(y_test, y_pred)
+    print("Accuracy:", accuracy)
+    print("\nClassification Report:")
+    print(classification_report(y_test, y_pred))
+
+    # # Save the model and vectorizer
+
+    with open('spam_detector_model.pkl', 'wb') as model_file:
+        pickle.dump(clf, model_file)
+    with open('count_vectorizer.pkl', 'wb') as vectorizer_file:
+        pickle.dump(count_vectorizer, vectorizer_file)
+    return Response("MOdel Trained successfully",status=status.HTTP_201_CREATED)

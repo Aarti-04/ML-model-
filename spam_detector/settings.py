@@ -40,8 +40,9 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
-    # 'channels',
+    # 'channels'
     "detector",
+    "spammodel",
     "rest_framework",
     
 ]
@@ -56,7 +57,8 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
-    "detector.middleware.PredictRequestValidationMiddleware"
+    "detector.middleware.ComposeMail_Request_ValidationMiddleware",
+    "detector.middleware.Predict_Email_Request_validationMiddleware"
     # "channels.middleware.AsgiMiddleware",
     # "channels.asgi.AsgiMiddleware",
     # "detector.middleware.TokenValidationMiddleware"
