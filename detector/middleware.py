@@ -60,11 +60,12 @@ class Predict_Email_Request_validationMiddleware:
     def __init__(self, get_response):
         self.get_response = get_response
     def __call__(self, request):
-        print("middleware called")
-        if request.path == '/api/predict/' and request.method == 'POST':
+        print("middlware called")
+        if request.path == '/model/predict/' and request.method == 'POST':
+            print("on path /model/predict/ ")
             data = request.body.decode("utf-8")
             data=json.loads(data)
-            print("data",data)
+            # print("data",data)
             Email_body = data.get('body')
             if not Email_body:
                 print("error returned")
@@ -88,6 +89,7 @@ class ComposeMail_Request_ValidationMiddleware:
     def __call__(self, request):
         print("middleware called")
         if request.path == '/api/composemail/' and request.method == 'POST':
+            print("on path /api/composemail/ ")
             data = request.body.decode("utf-8")
             data=json.loads(data)
             print("data",data)

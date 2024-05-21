@@ -1,3 +1,4 @@
+import csv
 from email import message
 from tokenize import TokenError
 from django.shortcuts import render
@@ -245,6 +246,7 @@ class MailDeleteDb(APIView):
     
 class MailFromDb(generics.ListCreateAPIView):
     # queryset=EmailMessageModel.objects.all()
+    
     serializer_class=EmailSerializer
     permission_classes=[IsAuthenticated]
     pagination_class=pagination.PageNumberPagination
@@ -258,8 +260,9 @@ class MailFromDb(generics.ListCreateAPIView):
     # By default, if no ordering is provided, order by timestamp in descending order
     ordering = ['-date']
     def get_queryset(self):
-        queryset = EmailMessageModel.objects.all().filter().order_by("-date")
-        query_type = self.request.query_params.get('query_type')  # Assuming 'query_type' is the query parameter to specify sent or inbox
+        queryset = EmailMessageModel.objects.all().order_by("-date")
+        query_type = self.request.query_params.get('query_type')
+          # Assuming 'query_type' is the query parameter to specify sent or inbox
         if query_type == 'sent':
             queryset = queryset.filter(sender=self.request.user,is_archived=False,is_deleted=False)  # Filter emails sent by the authenticated user
         elif query_type == 'inbox':
@@ -270,6 +273,7 @@ class MailFromDb(generics.ListCreateAPIView):
         elif query_type=="archive":
             queryset = queryset.filter(is_archived=True) 
         # print("queryset",queryset)
+        
         return queryset
     def list(self, request, *args, **kwargs):
         queryset = self.get_queryset()
@@ -284,54 +288,47 @@ class MailFromDb(generics.ListCreateAPIView):
             prediction_api_url = 'http://127.0.0.1:8000/model/predict/'
             data = {'body': mail_body}
             json_mail_body=json.dumps(data)
+            print("calledddddd json_mail_body",queryset)
+
             # Adjust this according to the API's requirements
             response = requests.post(prediction_api_url, data=json_mail_body,headers={'Content-Type': 'application/json'},timeout=20)
-            print(response.text)
+            print("response.text",response.text)
+            print(response.status_code)
             
             # Modify 'spam' field based on prediction
             if response.status_code == 200:
                 prediction_result = response.json()
                 is_spam = prediction_result['is_spam']  # Assuming the API returns a field 'is_spam'
-                email.spam = is_spam
-                email.save()
+            is_spam=is_spam
+            print("is_spam...",is_spam)
+            # email.spam = is_spam
+            setattr(email,"spam",is_spam)
+            email.save()
 
-                processed_data = {
-                    'id':email.id,
-                    # 'user_id':email.user_id,
-                    'message_id':email.message_id,
-                    'header': email.header,
-                    'body':email.body,
-                    'date':email.date,
-                    'sender': email.sender,
-                    'recipient': email.recipient,
-                    'snippet': email.snippet,
-                    'spam': is_spam,
-                    'is_archived':email.is_archived,
-                    'is_deleted':email.is_deleted
-                    # Add more fields as needed
-                }
-                processed_emails.append(processed_data)
-            else:
-                print("predict failed")
+            processed_data = {
+                'id':email.id,
+                # 'user_id':email.user_id,
+                'message_id':email.message_id,
+                'header': email.header,
+                'body':email.body,
+                'date':email.date,
+                'sender': email.sender,
+                'recipient': email.recipient,
+                'snippet': email.snippet,
+                'spam': is_spam,
+                'is_archived':email.is_archived,
+                'is_deleted':email.is_deleted
+                # Add more fields as needed
+            }
+            processed_emails.append(processed_data)
+            # else:
+                # print("predict failed")
                 # If prediction API fails, you can handle it accordingly
                 # For example, log the error or skip this email
-                pass
+                # pass
         
         return self.get_paginated_response(processed_emails)
-
-
-
-class MailReadApi(APIView):
-    def get(self,request):
-        print(request.user.id)
-        User_Token_cred=TokenModel.objects.get(userid=request.user.id)
-        if(User_Token_cred):
-            access_token=User_Token_cred.google_access_token
-            refresh_token=User_Token_cred.google_refresh_token
-            return Response({"access_token":access_token,"refresh_token":refresh_token})
-        else:
-            return Response("Please login with google")
-
+    
 class MailRead(APIView):
     # permission_classes=[IsAuthenticated]
     pagination_class = PageNumberPagination 
@@ -557,83 +554,18 @@ class ComposeMail(APIView):
         except Exception as e:
             print(f"An error occurred: {e}")
             return Response({"error": "Failed to create mail"},status=400)
+class Feedback(APIView):
+    def post(self, request):
+        message_id = request.data.get('message_id')
+        EmailMessage=EmailMessageModel.objects.get(id=message_id)
+        email_body=EmailMessage.body
+        
+        correct_label = request.data.get('label')  # 'ham' or 'spam'
 
-class Predict(APIView):
-    def preprocess_email_body(self,body):
-        # print("pre body",body)
-        # Remove URLs
-        body = re.sub(r'http[s]?://\S+', '', body)
-        # Remove email addresses
-        body = re.sub(r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b', '', body)
-        # Remove special characters and digits
-        body = re.sub(r'[^a-zA-Z\s]', '', body)
-        # Convert to lowercase
-        body = body.lower()
-        # print("processed body",body)
-        return body
-    def post(self,request):
-        data = request.body.decode('utf-8')
-        # print(data)
-        # Decode the bytes to a string
-        message_data=json.loads(data)
-        # print(message_data)
-        message_body=message_data["body"]
-        # return Response("predict")
-        #preprocess data
-        cleaned_body = self.preprocess_email_body(message_body)
-        # Load the saved model and vectorizer     
-        model_path = os.path.join(os.path.dirname(__file__), 'spam_detector_model.pkl')
-        vectorizer_path = os.path.join(os.path.dirname(__file__), 'count_vectorizer.pkl')
-        with open(model_path, 'rb') as model_file:
-            clf = pickle.load(model_file)
-            # print(clf)
-        with open(vectorizer_path, 'rb') as vectorizer_file:
-            count_vectorizer = pickle.load(vectorizer_file)
-            # print(count_vectorizer)
-        message_vector = count_vectorizer.transform([cleaned_body])
-         # Make a prediction
-        prediction = clf.predict(message_vector)
-        print("prediction",prediction[0])
-        if(prediction[0]=="spam"):
-            return Response({"is_spam": True},status=status.HTTP_200_OK)
-        else:
-            return Response({'is_spam': False},status=status.HTTP_200_OK)
-class Train(APIView):
-  def post(self,request):
-    file_path = os.path.join(settings.BASE_DIR, 'detector', 'SMSSpamCollection')
-    print(file_path)
-    # return Response("hello")
-    data = pd.read_csv(file_path, sep='\t', names=['label', 'message'])
-     # Feature extraction
-    print(data.head(100))
-    count_vectorizer = CountVectorizer(stop_words='english')
-    
-    x = count_vectorizer.fit_transform(data['message'])
-    print(x)
+        # Save feedback to a file or database
+        feedback_path = os.path.join(settings.BASE_DIR, 'spammodel', 'user_feedback.csv')
+        with open(feedback_path, 'a') as f:
+            writer = csv.writer(f)
+            writer.writerow([correct_label, message])
 
-    y = data['label']
-    # print(X)
-
-
-    #  # Split dataset into training and testing sets
-
-    X_train, X_test, y_train, y_test = train_test_split(x, y, test_size=0.2, random_state=42)
-    # #   # Train the model
-    clf = MultinomialNB()
-    # clf=svm.SVC()
-    clf.fit(X_train, y_train)
-
-    # # Evaluate the model
-    y_pred = clf.predict(X_test)
-    accuracy = accuracy_score(y_test, y_pred)
-    print("Accuracy:", accuracy)
-    print("\nClassification Report:")
-    print(classification_report(y_test, y_pred))
-
-    # # Save the model and vectorizer
-
-    with open('spam_detector_model.pkl', 'wb') as model_file:
-        pickle.dump(clf, model_file)
-    with open('count_vectorizer.pkl', 'wb') as vectorizer_file:
-        pickle.dump(count_vectorizer, vectorizer_file)
-    return Response("MOdel Trained successfully",status=status.HTTP_201_CREATED)
+        return Response("Feedback received", status=status.HTTP_201_CREATED)

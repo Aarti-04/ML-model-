@@ -26,9 +26,9 @@ SECRET_KEY = os.environ.get("SECRET_KEY")
 print("SECRET_KEY",SECRET_KEY)
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = False
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ['localhost', '127.0.0.1']
 
 # Application definition
 
@@ -167,7 +167,7 @@ CHANNEL_LAYERS = {
 # print("username",os.environ.get("CLIENT_ID"))
 # print("tokenuseri",os.environ.get("ToKEN_URI"))
 # print("user",os.environ.get("USERNAME1"))
-# print("passs",os.environ.get("PASSWORD1"))
+# print("Cloudname",os.environ.get("CLOUDINARY_CLOUD_NAME"))
 
 
 

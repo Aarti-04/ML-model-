@@ -1,11 +1,11 @@
 from django.contrib import admin
 from django.urls import path
-from .views import Train,MailDeleteDb,MailArchived,MailReadApi,MailFromDb,GoogleLoginView,Logout,Predict,GoogleRegisterView,MailRead,ComposeMail,TokenRefresh,LoginUser
+from .views import MailDeleteDb,MailArchived,MailFromDb,GoogleLoginView,Logout,GoogleRegisterView,MailRead,ComposeMail,TokenRefresh,LoginUser
 
 urlpatterns = [
     # path("admin/", admin.site.urls),
-    path("predict/",Predict.as_view(),name="predict"),
-    path("train/",Train.as_view(),name="train"),
+    # path("predict/",Predict.as_view(),name="predict"),
+    # path("train/",Train.as_view(),name="train"),
     # path("predict/",views.Predict.as_view(),name="predict"),
     # path("register/",RegisterAuthVerify.as_view(),name="register"),
     path("googleregister/",GoogleRegisterView.as_view(),name="GoogleRegisterView"),
@@ -14,7 +14,7 @@ urlpatterns = [
     path("logout/",Logout.as_view(),name="logout"),
     # path("google-auth-verify/",GoogleAuthVerify.as_view(),name="googleAuth"),
     # path("mailoperation",MailOperation.as_view(),name="MailOperation"),
-    path("Mailreadtoken/",MailReadApi.as_view(),name="getmailtoken"),
+    # path("Mailreadtoken/",MailReadApi.as_view(),name="getmailtoken"),
     path("mailread/",MailRead.as_view(),name="mailread"),
     path("mailreadfromdb/",MailFromDb.as_view(),name="mailfromdb"),
     path("maildelete/",MailDeleteDb.as_view(),name="mail-delete"),
