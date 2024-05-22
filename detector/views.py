@@ -266,7 +266,7 @@ class MailFromDb(generics.ListCreateAPIView):
         if query_type == 'sent':
             queryset = queryset.filter(sender=self.request.user,is_archived=False,is_deleted=False)  # Filter emails sent by the authenticated user
         elif query_type == 'inbox':
-            queryset = queryset.filter(recipient=self.request.user,is_archived=False,is_deleted=False) 
+            queryset = queryset.filter(recipient=self.request.user,is_archived=False,is_deleted=False,spam=False) 
         elif query_type=="spam":
             queryset = queryset.filter(spam=True,is_archived=False,is_deleted=False) 
              # Filter emails received by the authenticated user
@@ -534,15 +534,15 @@ class ComposeMail(APIView):
 
     def post(self, request):
         try:
-            data = request.body.decode('utf-8')
-            print(data)
+            # data = request.data.get('message_id')
+            # print(data)
             # Decode the bytes to a string
-            message_data=json.loads(data)
-            if(not message_data):
-                return Response("body can't be empty",status=status.HTTP_400_BAD_REQUEST)
-            header=message_data.get("header")
-            to=message_data.get("recipient")
-            mail_body=message_data.get("body")
+            # message_data=json.loads(data)
+            # if(not message_data):
+            #     return Response("body can't be empty",status=status.HTTP_400_BAD_REQUEST)
+            header=request.data.get("header") or ""
+            to=request.data.get("recipient")
+            mail_body=request.data.get("body") or ""
             gmail_service=get_gmail_service(request.user)
             # header="Test Mail from django"
             # to="sharma.aarti.dcs24@vnsgu.ac.in"

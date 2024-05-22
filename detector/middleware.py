@@ -72,11 +72,11 @@ class Predict_Email_Request_validationMiddleware:
                 # return HttpResponse({'error': 'sender_email, header, and body are required.'})
                 # response=HttpResponse(json.dumps({'error': 'email body is required.'}), content_type="application/json")
                 # response.status_code=status.HTTP_400_BAD_REQUEST
-                response = JsonResponse({'error': 'Email body is required.'},status=status.HTTP_400_BAD_REQUEST)
+                response = JsonResponse({'error': 'Please add header or body '},status=status.HTTP_400_BAD_REQUEST)
                 return response
                
                 # raise ValidationError('sender_email, header, and body are required.') 
-                return response
+                
         response = self.get_response(request)
         # print("response", response)
         return response
@@ -90,20 +90,20 @@ class ComposeMail_Request_ValidationMiddleware:
         print("middleware called")
         if request.path == '/api/composemail/' and request.method == 'POST':
             print("on path /api/composemail/ ")
-            data = request.body.decode("utf-8")
-            data=json.loads(data)
+            data = request.body.decode("utf-8") or "" 
+            data=json.loads(data) 
             print("data",data)
-            sender_email = data.get('recipient')
-            header = data.get('header')
-            body = data.get('body')
+            # header=request.data.get("header") or ""
+            sender_email=data.get("recipient") or False
+            # body=request.data.get("body") or ""
             print("sender_email",sender_email)
-            print("header",header)
-            print("body",body)
+            # print("header",header)
+            # print("body",body)
             # Check if sender_email, header, and body are not empty
-            if not sender_email or not header or not body:
+            if not sender_email:
                 print("error returned")
                 # return Response({'error': 'sender_email, header, and body are required.'})
-                response=HttpResponse(json.dumps({'error': 'sender_email, header, and body are required.'}), content_type="application/json",status=status.HTTP_400_BAD_REQUEST)
+                response=HttpResponse(json.dumps({'error': 'sender_email is required.'}), content_type="application/json",status=status.HTTP_400_BAD_REQUEST)
                 print("response", response)
                 # raise ValidationError('sender_email, header, and body are required.') 
                 return response
@@ -114,8 +114,6 @@ class ComposeMail_Request_ValidationMiddleware:
                 print("'error': 'Invalid sender_email format.'")
                 response=HttpResponse(json.dumps({'error': 'Invalid sender_email format.'}), content_type="application/json",status=status.HTTP_406_NOT_ACCEPTABLE)
                 # print("response", response)
-                # return Response({'error': 'Invalid sender_email format.'})
-                # raise ValidationError('Invalid sender_email format.')
                 return response
         response = self.get_response(request)
         return response

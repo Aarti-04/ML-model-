@@ -35,20 +35,76 @@ class Feedback(APIView):
     def post(self, request):
         message_id = request.data.get('message_id')
         correct_label = request.data.get('spam_label')
-        EmailMessage=EmailMessageModel.objects.get(id=message_id)
-        email_body=preprocess_email_body(EmailMessage.body)
-        # print(email_body)
+        email_message = EmailMessageModel.objects.get(id=message_id)
+        email_body = preprocess_email_body(email_message.body)
 
-        
-          # 'ham' or 'spam'
-
-        # Save feedback to a file or database
+        # Save feedback to CSV
         feedback_path = os.path.join(settings.BASE_DIR, 'spammodel', 'user_feedback.csv')
-        with open(feedback_path, 'a') as f:
-            writer = csv.writer(f)
-            writer.writerow([correct_label+"\t"+ email_body])
-        print("feedback send")
-        return Response("Feedback received", status=status.HTTP_201_CREATED)
+        new_feedback = pd.DataFrame({
+            'label': [correct_label],
+            'message': [email_body]
+        })
+        
+        # Append feedback data to CSV file
+        if os.path.exists(feedback_path):
+            new_feedback.to_csv(feedback_path, mode='a', header=False, index=False, sep='\t')
+        else:
+            new_feedback.to_csv(feedback_path, mode='w', header=True, index=False, sep='\t')
+
+        # the existing model and vectorizer
+        model_save_path = os.path.join(settings.BASE_DIR, 'spammodel', 'spam_detector_model.pkl')
+        vectorizer_save_path = os.path.join(settings.BASE_DIR, 'spammodel', 'count_vectorizer.pkl')
+        with open(model_save_path, 'rb') as model_file:
+            clf = pickle.load(model_file)
+        with open(vectorizer_save_path, 'rb') as vectorizer_file:
+            count_vectorizer = pickle.load(vectorizer_file)
+        # return Response("trainned")
+        # original training data
+        file_path = os.path.join(settings.BASE_DIR, 'spammodel', 'SMSSpamCollection')
+        data = pd.read_csv(file_path, sep='\t', names=['label', 'message'])
+        # feedback data
+        feedback_data = pd.read_csv(feedback_path, sep='\t', names=['label', 'message'])
+        feedback_data.drop_duplicates(inplace=True)
+        print(feedback_data.head())
+        # Combine original data with feedback data
+        data = pd.concat([data, feedback_data], ignore_index=True)
+        
+        # Feature extraction using the existing vectorizer
+        # print(count_vectorizer)
+        data.dropna(subset=['message'], inplace=True)
+        X = count_vectorizer.transform(data['message'])
+        y = data['label']
+        
+        # Split dataset into training and testing sets
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+        # Retrain the model with combined data
+        clf.fit(X_train, y_train)
+
+        # Evaluate the retrained model
+        y_pred = clf.predict(X_test)
+        accuracy = accuracy_score(y_test, y_pred)
+        classification_model_report = classification_report(y_test, y_pred)
+
+        print("Model retrained with feedback.")
+        print("Accuracy:", accuracy)
+        print("Classification report:\n", classification_model_report)
+
+        # Save the updated model and vectorizer
+        with open(model_save_path, 'wb') as model_file:
+            print("Saving updated spam_detector_model.pkl")
+            pickle.dump(clf, model_file)
+
+        with open(vectorizer_save_path, 'wb') as vectorizer_file:
+            print("Saving updated count_vectorizer.pkl")
+            pickle.dump(count_vectorizer, vectorizer_file)
+
+        return Response({
+            "success": "Feedback received and model retrained",
+            "accuracy": accuracy,
+            "classification_report": classification_model_report,
+            "graph_url": ""
+        }, status=status.HTTP_201_CREATED)
 
 class Predict(APIView):
 #   permission_classes=[IsAuthenticated]
@@ -125,34 +181,26 @@ class Train(APIView):
         data = pd.read_csv(file_path, sep='\t', names=['label', 'message'])
         # Feature extraction
         print(data.head(100))
-        
-        feedback_path = os.path.join(settings.BASE_DIR, 'spammodel', 'user_feedback.csv')
-        # feedback_path=""
-        if os.path.exists(feedback_path):
-            feedback_data = pd.read_csv(feedback_path,sep='\t', names=['label', 'message'])
-            print("feedback_data",feedback_data)
-            # Combine original data with feedback
-            data = pd.concat([data, feedback_data], ignore_index=True)
-            print("data",data)
-
-        
+        # feedback_path = os.path.join(settings.BASE_DIR, 'spammodel', 'user_feedback.csv')
+        # # feedback_path=""
+        # if os.path.exists(feedback_path):
+        #     feedback_data = pd.read_csv(feedback_path,sep='\t', names=['label', 'message'])
+        #     print("feedback_data",feedback_data)
+        #     # Combine original data with feedback
+        #     data = pd.concat([data, feedback_data], ignore_index=True)
+        #     print("data",data)
         count_vectorizer = CountVectorizer(stop_words='english')
         
         x = count_vectorizer.fit_transform(data['message'])
         print(x)
-
         y = data['label']
         # print(X)
-
-
         #  # Split dataset into training and testing sets
-        
         X_train, X_test, y_train, y_test = train_test_split(x, y, test_size=0.2, random_state=42)
         # #   # Train the model
         clf = MultinomialNB()
         # clf=svm.SVC()
         clf.fit(X_train, y_train)
-
         # # Evaluate the model
         y_pred = clf.predict(X_test)
         accuracy = accuracy_score(y_test, y_pred)

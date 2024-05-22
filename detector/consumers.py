@@ -307,6 +307,7 @@ class MyConsumer(AsyncWebsocketConsumer):
                 # body="<p>Hello good morning</p>"
                
                 if body=='':
+                    # body=snippet
                     print("still  data not found")
                 #     body=self.get_body_content(parts,second_time=True)
                 #     print("second time read")
