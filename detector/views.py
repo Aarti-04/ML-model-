@@ -254,10 +254,10 @@ class MailFromDb(generics.ListCreateAPIView):
     filter_backends=[SearchFilter,OrderingFilter]
     search_fields = ['header', 'sender', 'recipient']  # Specify the fields you want to enable search on
 
-    # Define fields to sort
+    # fields to sort
     ordering_fields = ['id', 'header', 'sender', 'recipient', 'date']  # Specify the fields you want to enable sorting on
 
-    # By default, if no ordering is provided, order by timestamp in descending order
+    # By default, order by date in descending order
     ordering = ['-date']
     def get_queryset(self):
         queryset = EmailMessageModel.objects.all().order_by("-date")
@@ -273,7 +273,6 @@ class MailFromDb(generics.ListCreateAPIView):
         elif query_type=="archive":
             queryset = queryset.filter(is_archived=True) 
         # print("queryset",queryset)
-        
         return queryset
     def list(self, request, *args, **kwargs):
         queryset = self.get_queryset()
@@ -282,52 +281,54 @@ class MailFromDb(generics.ListCreateAPIView):
 
         for email in queryset:
             # Fetch mail body
-            mail_body = email.body  # Assuming you have a field named 'body' in your EmailMessageModel
-            
-            # Send request to prediction API
-            prediction_api_url = 'http://127.0.0.1:8000/model/predict/'
-            data = {'body': mail_body}
-            json_mail_body=json.dumps(data)
-            print("calledddddd json_mail_body",queryset)
+            try:
+                mail_body = email.body or email.header or email.snippet or ""  # Assuming you have a field named 'body' in your EmailMessageModel
+                
+                # Send request to prediction API
+                prediction_api_url = 'http://127.0.0.1:8000/model/predict/'
+                data = {'body': mail_body}
+                json_mail_body=json.dumps(data)
+                print("calledddddd json_mail_body",json_mail_body)
 
-            # Adjust this according to the API's requirements
-            response = requests.post(prediction_api_url, data=json_mail_body,headers={'Content-Type': 'application/json'},timeout=20)
-            print("response.text",response.text)
-            print(response.status_code)
-            
-            # Modify 'spam' field based on prediction
-            if response.status_code == 200:
-                prediction_result = response.json()
-                is_spam = prediction_result['is_spam']  # Assuming the API returns a field 'is_spam'
-            is_spam=is_spam
-            print("is_spam...",is_spam)
-            # email.spam = is_spam
-            setattr(email,"spam",is_spam)
-            email.save()
+                try:
+                    response = requests.post(prediction_api_url, data=json_mail_body,headers={'Content-Type': 'application/json'},timeout=20)
+                    print("response.text",response.text)
+                    print(response.status_code)
+                    
+                    # Modify 'spam' field based on prediction
+                    if response.status_code == 200:
+                        prediction_result = response.json()
+                        is_mail_spam = prediction_result['is_spam']
+                    if response.status_code==400:
+                        is_mail_spam=False
+                        result=response.json()
+                        print(result.error)
+                        return Response("Error Body or header required",status=status.HTTP_400_BAD_REQUEST)
+                except Exception as e:
+                    print("exception....",str(e))
+                setattr(email,"spam",is_mail_spam)
+                email.save()
 
-            processed_data = {
-                'id':email.id,
-                # 'user_id':email.user_id,
-                'message_id':email.message_id,
-                'header': email.header,
-                'body':email.body,
-                'date':email.date,
-                'sender': email.sender,
-                'recipient': email.recipient,
-                'snippet': email.snippet,
-                'spam': is_spam,
-                'is_archived':email.is_archived,
-                'is_deleted':email.is_deleted
-                # Add more fields as needed
-            }
-            processed_emails.append(processed_data)
-            # else:
-                # print("predict failed")
-                # If prediction API fails, you can handle it accordingly
-                # For example, log the error or skip this email
-                # pass
-        
+                processed_data = {
+                    'id':email.id,
+                    # 'user_id':email.user_id,
+                    'message_id':email.message_id,
+                    'header': email.header,
+                    'body':email.body,
+                    'date':email.date,
+                    'sender': email.sender,
+                    'recipient': email.recipient,
+                    'snippet': email.snippet,
+                    'spam': is_mail_spam,
+                    'is_archived':email.is_archived,
+                    'is_deleted':email.is_deleted
+                    # Add more fields as needed
+                }
+                processed_emails.append(processed_data)
+            except Exception as e:
+                return Response(f"Error {e}")
         return self.get_paginated_response(processed_emails)
+
     
 class MailRead(APIView):
     # permission_classes=[IsAuthenticated]
@@ -508,7 +509,7 @@ class MailArchived(APIView):
             return Response(f"{str(e)}",status=status.HTTP_400_BAD_REQUEST)
 class ComposeMail(APIView):
     permission_classes=[IsAuthenticated]
-    def gmail_compose(self,mail_subject, email_recipient, mail_body):
+    def gmail_compose(self,mail_subject, email_recipient, mail_body,detected_as_spam=""):
         message = {
             'raw': base64.urlsafe_b64encode(
                 f'MIME-Version: 1.0\n'
@@ -517,7 +518,9 @@ class ComposeMail(APIView):
                 f"To: {email_recipient}\n"
                 f"Subject: {mail_subject}\n\n"
                 f"{mail_body}"
+                f"{detected_as_spam and 'System detected as spam'}"
                 .encode("utf-8")
+                
             ).decode("utf-8")
         }
         return message
@@ -543,29 +546,15 @@ class ComposeMail(APIView):
             header=request.data.get("header") or ""
             to=request.data.get("recipient")
             mail_body=request.data.get("body") or ""
+            detected_as_spam=request.data.get("detected_as_spam") or ""
             gmail_service=get_gmail_service(request.user)
             # header="Test Mail from django"
             # to="sharma.aarti.dcs24@vnsgu.ac.in"
             # mail_body="<html><h1>hello user how are you doing?</h1><br><br><h3>you have won 10 lacs case prize please go through bellow link and get complete your process</h3></html>"
-            message_to_send=self.gmail_compose(header,to,mail_body)
+            message_to_send=self.gmail_compose(header,to,mail_body,detected_as_spam)
             message_send_or_not=self.gmail_send(gmail_service,message_to_send)
             if(message_send_or_not):
                 return Response({"success":"Mail Sent successfully"},status=status.HTTP_200_OK)
         except Exception as e:
             print(f"An error occurred: {e}")
             return Response({"error": "Failed to create mail"},status=400)
-class Feedback(APIView):
-    def post(self, request):
-        message_id = request.data.get('message_id')
-        EmailMessage=EmailMessageModel.objects.get(id=message_id)
-        email_body=EmailMessage.body
-        
-        correct_label = request.data.get('label')  # 'ham' or 'spam'
-
-        # Save feedback to a file or database
-        feedback_path = os.path.join(settings.BASE_DIR, 'spammodel', 'user_feedback.csv')
-        with open(feedback_path, 'a') as f:
-            writer = csv.writer(f)
-            writer.writerow([correct_label, message])
-
-        return Response("Feedback received", status=status.HTTP_201_CREATED)

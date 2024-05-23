@@ -68,7 +68,7 @@ class Predict_Email_Request_validationMiddleware:
             # print("data",data)
             Email_body = data.get('body')
             if not Email_body:
-                print("error returned")
+                print("error returned from middleware")
                 # return HttpResponse({'error': 'sender_email, header, and body are required.'})
                 # response=HttpResponse(json.dumps({'error': 'email body is required.'}), content_type="application/json")
                 # response.status_code=status.HTTP_400_BAD_REQUEST

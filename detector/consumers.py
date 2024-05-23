@@ -137,6 +137,7 @@ import os
 import jwt
 from urllib.parse import parse_qs
 from google.auth.transport import requests
+import json
 
 
 class MyConsumer(AsyncWebsocketConsumer):
@@ -149,6 +150,7 @@ class MyConsumer(AsyncWebsocketConsumer):
         self.reading_mail_task = asyncio.create_task(self.start_reading_mail(access_token))
 
         # await self.start_reading_mail(access_token)
+    
     async def disconnect(self, close_code):
         print("WebSocket disconnected")
         if hasattr(self, 'reading_mail_task'):
@@ -189,7 +191,11 @@ class MyConsumer(AsyncWebsocketConsumer):
             print("results",results[0]["userid"])
             print("results",results[0]["spam"])
             
-            await self.save_mail_data(results)
+            new_mail_count=await self.save_mail_data(results)
+            if(new_mail_count>0):
+                print("new mail count",new_mail_count)
+                await self.send(text_data=json.dumps(new_mail_count))
+
 
         except Exception as e:
             print(f"Error reading and inserting mail: {e}")
@@ -213,6 +219,7 @@ class MyConsumer(AsyncWebsocketConsumer):
     def save_mail_data(self, mail_data):
         # Save mail data into the database
         # print("in save mail data")
+        new_mail_count=0
         try:
             for mail in mail_data:
                 exist_mail = EmailMessageModel.objects.filter(message_id=mail["message_id"]).exists()
@@ -226,19 +233,17 @@ class MyConsumer(AsyncWebsocketConsumer):
                     serialized_email = EmailSerializer(data=processed_data)
                     if serialized_email.is_valid(raise_exception=True):
                         serialized_email.save()
+                        new_mail_count +=1
                         print("data saved.....")
                 else:
                     print("in else")
                     break
-
+            return new_mail_count
         except Exception as e:
             print(str(e))
 
     # @database_sync_to_async
     def extract_email_info(self, data):
-        # Extract and process email information
-        # print("data.......",data)
-        # return
         processed_mail_data = data
         # processed_mail_data["date"] = datetime.strptime(data["date"].replace(' (UTC)', ''), '%a, %d %b %Y %H:%M:%S %z')
         processed_mail_data["date"]=parser.parse(data["date"])
@@ -294,28 +299,18 @@ class MyConsumer(AsyncWebsocketConsumer):
                 to = next((header['value'] for header in headers if header['name'] == 'To'), None)
                 subject = next((header['value'] for header in headers if header['name'] == 'Subject'), None)
                 date = next((header['value'] for header in headers if header['name'] == 'Date'), None)
-                # print("payload...",payload)
-                
+                # print("payload...",payload)  
                 body=payload['body']
-
                 # print("payload parts...",parts)
                 print("first body")
                 body = self.get_body_content(body)
                 if(body==''):
                     parts = payload.get('parts', [])
                     body=self.get_body_content1(parts)
-                # body="<p>Hello good morning</p>"
-               
+        
                 if body=='':
                     # body=snippet
                     print("still  data not found")
-                #     body=self.get_body_content(parts,second_time=True)
-                #     print("second time read")
-                    # print("second body",body)
-                # Predict if the email is spam or not
-                # prediction_data = await self.predict_spam(body)
-                # spam_or_not = True if (prediction_data["prediction"] == "spam") else False
-
                 results.append({'snippet': snippet, 'message_id': msg_id, 'header': subject, "body": body,
                                 "date": date, 'sender': sender, "recipient": to, "spam": False,"userid":user_id})
 
@@ -334,13 +329,7 @@ class MyConsumer(AsyncWebsocketConsumer):
         body=''
         if not parts:
             return body
-        for part in parts:
-        #     # if second_time and part.get('mimeType') == 'text/plain':
-        # #     #     data1 = part['body']['data'] 
-        # #     #     if data1:
-        # #     #         body+=base64.urlsafe_b64decode(data1).decode()
-        # #     #         print("data1 returned")
-            
+        for part in parts:            
             if part.get('mimeType') == 'text/html':
                 print(part.get('mimeType'))
                 data = part['body']['data']
@@ -349,24 +338,4 @@ class MyConsumer(AsyncWebsocketConsumer):
                     body+=base64.urlsafe_b64decode(data).decode()
                     print("data1 have body")
         return body
-        # Predict if the email
-        # body = ''
-        # if not parts:
-        #     return body
-        # for part in parts:
-        #     if 'body' in part:
-        #         if 'data' in part['body']:
-        #             data = part['body']['data']
-        #             if data:
-        #                 body += base64.urlsafe_b64decode(data).decode()
-        #     elif 'parts' in part:
-        #         body += self.get_body_content(part['parts'], second_time)
-        # html_pattern = re.compile(r'(<html[^>]*>.*?</html>|<!DOCTYPE html>.*?</html>)', re.DOTALL)
-        # match = html_pattern.search(body)
-        # if match:
-        #     return match.group(0)
-        # else:
-        #     return ''
-
-            # return body
 

@@ -30,12 +30,14 @@ load_dotenv()
 # Create your views here.
 
 
-class Feedback(APIView):
+class SpamMailFeedback(APIView):
     permission_classes=[IsAuthenticated]
     def post(self, request):
-        message_id = request.data.get('message_id')
+        message_id = request.data.get('message_id') or ""
+        message_body=request.data.get("message_body") or ""
         correct_label = request.data.get('spam_label')
-        email_message = EmailMessageModel.objects.get(id=message_id)
+        if(message_id):
+            email_message = EmailMessageModel.objects.get(id=message_id)
         email_body = preprocess_email_body(email_message.body)
 
         # Save feedback to CSV
