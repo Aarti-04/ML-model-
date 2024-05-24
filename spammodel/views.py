@@ -36,13 +36,14 @@ class SpamMailFeedback(APIView):
         message_id = request.data.get('message_id') or ""
         email_body=request.data.get("message_body") or ""
         correct_label = request.data.get('spam_label')
+        print("correct_label",correct_label)
         email_message={}
         if(message_id):
             email_message = EmailMessageModel.objects.get(id=message_id)
             email_body = preprocess_email_body(email_message.body)
         else:
             email_body = preprocess_email_body(email_body)
-        print("in feedback")    
+        print("in feedback",correct_label)    
         # Save feedback to CSV
         feedback_path = os.path.join(settings.BASE_DIR, 'spammodel', 'user_feedback.csv')
         new_feedback = pd.DataFrame({
@@ -109,7 +110,7 @@ class SpamMailFeedback(APIView):
             "accuracy": accuracy,
             "classification_report": classification_model_report,
             "graph_url": ""
-        }, status=status.HTTP_201_CREATED)
+        }, status=status.HTTP_200_OK)
 
 class Predict(APIView):
 #   permission_classes=[IsAuthenticated]

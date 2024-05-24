@@ -104,9 +104,9 @@ class LoginUser(APIView):
 class Logout(APIView):
     parser_classes=[IsAuthenticated]
     def delete(self,request):
-        user=request.user
-        print(user)
-        logout(request)
+        # user=request.user
+        # print(user)
+        # logout(request)
         return Response("logout")
         # user, created =CustomUser.objects.get(email=user_email)
 def get_auth_jwt_token(authenticatedUser):
