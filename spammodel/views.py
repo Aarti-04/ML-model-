@@ -34,12 +34,15 @@ class SpamMailFeedback(APIView):
     permission_classes=[IsAuthenticated]
     def post(self, request):
         message_id = request.data.get('message_id') or ""
-        message_body=request.data.get("message_body") or ""
+        email_body=request.data.get("message_body") or ""
         correct_label = request.data.get('spam_label')
+        email_message={}
         if(message_id):
             email_message = EmailMessageModel.objects.get(id=message_id)
-        email_body = preprocess_email_body(email_message.body)
-
+            email_body = preprocess_email_body(email_message.body)
+        else:
+            email_body = preprocess_email_body(email_body)
+        print("in feedback")    
         # Save feedback to CSV
         feedback_path = os.path.join(settings.BASE_DIR, 'spammodel', 'user_feedback.csv')
         new_feedback = pd.DataFrame({

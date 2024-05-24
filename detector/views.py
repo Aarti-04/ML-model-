@@ -516,11 +516,9 @@ class ComposeMail(APIView):
                 f'Content-Type: text/html; charset="UTF-8"\n'
                 f"From: itbase.tv@gmail.com\n"
                 f"To: {email_recipient}\n"
-                f"Subject: {mail_subject}\n\n"
-                f"{mail_body}"
-                f"{detected_as_spam and 'System detected as spam'}"
-                .encode("utf-8")
-                
+                f"Subject: {mail_subject}'\t {detected_as_spam and 'System detected as spam'}' \n\n"
+                f"{mail_body}\n\n"
+                .encode("utf-8")   
             ).decode("utf-8")
         }
         return message
