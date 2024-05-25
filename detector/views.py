@@ -245,89 +245,178 @@ class MailDeleteDb(APIView):
             return Response(f"Error {str(e)}",status=status.HTTP_500_INTERNAL_SERVER_ERROR)            
     
 class MailFromDb(generics.ListCreateAPIView):
-    # queryset=EmailMessageModel.objects.all()
-    
-    serializer_class=EmailSerializer
-    permission_classes=[IsAuthenticated]
-    pagination_class=pagination.PageNumberPagination
-    pagination_class.page_size=10
-    filter_backends=[SearchFilter,OrderingFilter]
-    search_fields = ['header', 'sender', 'recipient']  # Specify the fields you want to enable search on
 
-    # fields to sort
-    ordering_fields = ['id', 'header', 'sender', 'recipient', 'date']  # Specify the fields you want to enable sorting on
-
-    # By default, order by date in descending order
+    serializer_class = EmailSerializer
+    permission_classes = [IsAuthenticated]
+    pagination_class = pagination.PageNumberPagination
+    pagination_class.page_size = 10
+    filter_backends = [SearchFilter, OrderingFilter]
+    search_fields = ['header', 'sender', 'recipient']
+    ordering_fields = ['id', 'header', 'sender', 'recipient', 'date']
     ordering = ['-date']
+
     def get_queryset(self):
         queryset = EmailMessageModel.objects.all().order_by("-date")
         query_type = self.request.query_params.get('query_type')
-          # Assuming 'query_type' is the query parameter to specify sent or inbox
+        per_page_total_data = self.request.query_params.get("per_page_total_data")
+        
+        if per_page_total_data:
+            self.pagination_class.page_size = per_page_total_data
+
+        user = self.request.user
+        filters = {
+            'is_archived': False,
+            'is_deleted': False
+        }
+
         if query_type == 'sent':
-            queryset = queryset.filter(sender=self.request.user,is_archived=False,is_deleted=False)  # Filter emails sent by the authenticated user
+            filters['sender'] = user
         elif query_type == 'inbox':
-            queryset = queryset.filter(recipient=self.request.user,is_archived=False,is_deleted=False,spam=False) 
-        elif query_type=="spam":
-            queryset = queryset.filter(spam=True,is_archived=False,is_deleted=False) 
-             # Filter emails received by the authenticated user
-        elif query_type=="archive":
-            queryset = queryset.filter(is_archived=True) 
-        # print("queryset",queryset)
-        return queryset
+            filters['recipient'] = user
+            filters['spam'] = False
+        elif query_type == 'spam':
+            filters['spam'] = True
+        elif query_type == 'archive':
+            filters['is_archived'] = True
+
+        return queryset.filter(**filters)
+
     def list(self, request, *args, **kwargs):
         queryset = self.get_queryset()
-        queryset = self.paginate_queryset(queryset)
+        page = self.paginate_queryset(queryset)
         processed_emails = []
+        user_email = request.user.email
 
-        for email in queryset:
-            # Fetch mail body
+        prediction_api_url = 'http://127.0.0.1:8000/model/predict/'
+        print("now",datetime.now())
+        now=datetime.now()
+        for email in page:
+            mail_body = email.body or email.header or email.snippet or ""
+            data = {'body': mail_body}
+            json_mail_body = json.dumps(data)
+
             try:
-                mail_body = email.body or email.header or email.snippet or ""  # Assuming you have a field named 'body' in your EmailMessageModel
+                response = requests.post(prediction_api_url, data=json_mail_body, headers={'Content-Type': 'application/json'}, timeout=20)
                 
-                # Send request to prediction API
-                prediction_api_url = 'http://127.0.0.1:8000/model/predict/'
-                data = {'body': mail_body}
-                json_mail_body=json.dumps(data)
-                print("calledddddd json_mail_body",json_mail_body)
-
-                try:
-                    response = requests.post(prediction_api_url, data=json_mail_body,headers={'Content-Type': 'application/json'},timeout=20)
-                    print("response.text",response.text)
-                    print(response.status_code)
-                    
-                    # Modify 'spam' field based on prediction
-                    if response.status_code == 200:
-                        prediction_result = response.json()
-                        is_mail_spam = prediction_result['is_spam']
-                    if response.status_code==400:
-                        is_mail_spam=False
-                        result=response.json()
-                        print(result.error)
-                        return Response("Error Body or header required",status=status.HTTP_400_BAD_REQUEST)
-                except Exception as e:
-                    print("exception....",str(e))
-                setattr(email,"spam",is_mail_spam)
-                email.save()
+                if response.status_code == 200:
+                    prediction_result = response.json()
+                    is_mail_spam = prediction_result.get('is_spam', False)
+                else:
+                    is_mail_spam = False
+                    return Response("Error: Body or header required", status=status.HTTP_400_BAD_REQUEST)
+                
+                email.spam = is_mail_spam
+                email.save(update_fields=['spam'])
 
                 processed_data = {
-                    'id':email.id,
-                    # 'user_id':email.user_id,
-                    'message_id':email.message_id,
+                    'id': email.id,
+                    'message_id': email.message_id,
                     'header': email.header,
-                    'body':email.body,
-                    'date':email.date,
+                    'body': email.body,
+                    'date': email.date,
                     'sender': email.sender,
                     'recipient': email.recipient,
                     'snippet': email.snippet,
                     'spam': is_mail_spam,
-                    'is_archived':email.is_archived,
-                    'is_deleted':email.is_deleted
-                    # Add more fields as needed
+                    'is_archived': email.is_archived,
+                    'is_deleted': email.is_deleted,
+                    'user_email': user_email
                 }
                 processed_emails.append(processed_data)
+            except requests.exceptions.RequestException as e:
+                return Response(f"RequestException: {e}", status=status.HTTP_500_INTERNAL_SERVER_ERROR)
             except Exception as e:
-                return Response(f"Error {e}")
+                return Response(f"Error: {e}", status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        print("then",datetime.now()-now)
         return self.get_paginated_response(processed_emails)
+    # #queryset=EmailMessageModel.objects.all()
+    
+    # serializer_class=EmailSerializer
+    # permission_classes=[IsAuthenticated]
+    # pagination_class=pagination.PageNumberPagination
+    # pagination_class.page_size=10
+    # filter_backends=[SearchFilter,OrderingFilter]
+    # search_fields = ['header', 'sender', 'recipient']  # Specify the fields you want to enable search on
+
+    # # fields to sort
+    # ordering_fields = ['id', 'header', 'sender', 'recipient', 'date']  # Specify the fields you want to enable sorting on
+
+    # # By default, order by date in descending order
+    # ordering = ['-date']
+    # def get_queryset(self):
+    #     queryset = EmailMessageModel.objects.all().order_by("-date")
+    #     query_type = self.request.query_params.get('query_type')
+    #     per_page_total_data=self.request.query_params.get("per_page_total_data")
+    #     self.pagination_class.page_size=per_page_total_data
+    #       # Assuming 'query_type' is the query parameter to specify sent or inbox
+    #     if query_type == 'sent':
+    #         queryset = queryset.filter(sender=self.request.user,is_archived=False,is_deleted=False)  # Filter emails sent by the authenticated user
+    #     elif query_type == 'inbox':
+    #         queryset = queryset.filter(recipient=self.request.user,is_archived=False,is_deleted=False,spam=False) 
+    #     elif query_type=="spam":
+    #         queryset = queryset.filter(spam=True,is_archived=False,is_deleted=False) 
+    #          # Filter emails received by the authenticated user
+    #     elif query_type=="archive":
+    #         queryset = queryset.filter(is_archived=True) 
+    #     # print("queryset",queryset)
+    #     return queryset
+    # def list(self, request, *args, **kwargs):
+    #     queryset = self.get_queryset()
+    #     queryset = self.paginate_queryset(queryset)
+    #     processed_emails = []
+    #     print("datetime.time",datetime.now())
+    #     now=datetime.now()
+    #     for email in queryset:
+    #         # Fetch mail body
+    #         try:
+    #             mail_body = email.body or email.header or email.snippet or ""  # Assuming you have a field named 'body' in your EmailMessageModel
+                
+    #             # Send request to prediction API
+    #             prediction_api_url = 'http://127.0.0.1:8000/model/predict/'
+    #             data = {'body': mail_body}
+    #             json_mail_body=json.dumps(data)
+    #             print("calledddddd json_mail_body",json_mail_body)
+
+    #             try:
+    #                 response = requests.post(prediction_api_url, data=json_mail_body,headers={'Content-Type': 'application/json'},timeout=20)
+    #                 print("response.text",response.text)
+    #                 print(response.status_code)
+                    
+    #                 # Modify 'spam' field based on prediction
+    #                 if response.status_code == 200:
+    #                     prediction_result = response.json()
+    #                     is_mail_spam = prediction_result['is_spam']
+    #                 if response.status_code==400:
+    #                     is_mail_spam=False
+    #                     result=response.json()
+    #                     print(result.error)
+    #                     return Response("Error Body or header required",status=status.HTTP_400_BAD_REQUEST)
+    #             except Exception as e:
+    #                 print("exception....",str(e))
+    #             setattr(email,"spam",is_mail_spam)
+    #             email.save()
+
+    #             processed_data = {
+    #                 'id':email.id,
+    #                 # 'user_id':email.user_id,
+    #                 'message_id':email.message_id,
+    #                 'header': email.header,
+    #                 'body':email.body,
+    #                 'date':email.date,
+    #                 'sender': email.sender,
+    #                 'recipient': email.recipient,
+    #                 'snippet': email.snippet,
+    #                 'spam': is_mail_spam,
+    #                 'is_archived':email.is_archived,
+    #                 'is_deleted':email.is_deleted
+    #                 # Add more fields as needed
+    #             }
+    #             processed_emails.append(processed_data)
+    #         except Exception as e:
+    #             return Response(f"Error {e}")
+    #     print("datetime.time",datetime.now())
+    #     print("then",datetime.now()-now)
+    #     return self.get_paginated_response(processed_emails)
 
     
 class MailRead(APIView):
@@ -516,7 +605,7 @@ class ComposeMail(APIView):
                 f'Content-Type: text/html; charset="UTF-8"\n'
                 f"From: itbase.tv@gmail.com\n"
                 f"To: {email_recipient}\n"
-                f"Subject: {mail_subject}'\t {detected_as_spam and 'System detected as spam'}' \n\n"
+                f"Subject: {mail_subject}\t {detected_as_spam and 'Detected as spam Mail'}' \n\n"
                 f"{mail_body}\n\n"
                 .encode("utf-8")   
             ).decode("utf-8")
