@@ -12,7 +12,8 @@ class CustomUser(AbstractUser):
     email=models.EmailField(_("Email Address"),unique=True)
     USERNAME_FIELD="email"
     name=models.CharField(max_length=100,default="")
-    updated_at=models.DateTimeField(auto_now=True)
+    updated_at=models.DateTimeField(auto_now=True,null=True)
+    created_at = models.DateTimeField(auto_now_add=True,null=True)
     is_first_login=models.BooleanField(default=True)
     REQUIRED_FIELDS=[]
     objects=CustomUserManager()
@@ -22,6 +23,8 @@ class TokenModel(models.Model):
     jwt_refresh_token = models.TextField(default="")
     google_access_token=models.TextField(default="")
     google_refresh_token=models.TextField(default="")
+    created_at = models.DateTimeField(auto_now_add=True,null=True) 
+    updated_at = models.DateTimeField(auto_now=True,null=True)
     objects=models.Manager()
     token_manager=TokenManager()
 class EmailMessageModel(models.Model):
@@ -37,7 +40,17 @@ class EmailMessageModel(models.Model):
     spam=models.BooleanField(default=False)
     is_archived=models.BooleanField(default=False)
     is_deleted=models.BooleanField(default=False,blank=True)
+    created_at = models.DateTimeField(auto_now_add=True,null=True) 
+    updated_at = models.DateTimeField(auto_now=True,null=True)      
     objects=models.Manager()
+    
+    class Meta:
+        indexes = [
+            models.Index(fields=['userid']),
+            models.Index(fields=['date']),
+        ]
+
+
 
 
 

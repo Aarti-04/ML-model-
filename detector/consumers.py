@@ -275,7 +275,7 @@ class MyConsumer(AsyncWebsocketConsumer):
         try:
             user_object=CustomUser.objects.get(email=user_token_cred.userid)
             if(user_object.is_first_login):
-                max_results=60
+                max_results=50
                 setattr(user_object,"is_first_login",False)
                 user_object.save()
             else:

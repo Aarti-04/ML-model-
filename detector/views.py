@@ -257,8 +257,8 @@ class MailFromDb(generics.ListCreateAPIView):
 
     def get_queryset(self):
         queryset = EmailMessageModel.objects.all().order_by("-date")
-        query_type = self.request.query_params.get('query_type')
-        per_page_total_data = self.request.query_params.get("per_page_total_data")
+        query_type = self.request.query_params.get('query_type') or "inbox"
+        per_page_total_data = self.request.query_params.get("per_page_total_data") or 10
         
         if per_page_total_data:
             self.pagination_class.page_size = per_page_total_data
