@@ -88,6 +88,7 @@ from sklearn import svm
 # from imblearn.under_sampling import RandomUnderSampler
 import numpy as np
 from django.conf import settings
+from django.db.models import Q
 
 load_dotenv()
 
@@ -243,15 +244,96 @@ class MailDeleteDb(APIView):
                 return Response("Mail not exsist",status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
             return Response(f"Error {str(e)}",status=status.HTTP_500_INTERNAL_SERVER_ERROR)            
-    
-class MailFromDb(generics.ListCreateAPIView):
+class MailSearchFilter(generics.ListCreateAPIView):
+    serializer_class = EmailSerializer
+    permission_classes = [IsAuthenticated]
+    pagination_class = pagination.PageNumberPagination
+    pagination_class.page_size = 10
+    filter_backends = [SearchFilter, OrderingFilter]
+    search_fields = ['header', 'sender', 'recipient', 'body', 'snippet',"userid__email"]
+    ordering_fields = ['id', 'header', 'sender', 'recipient', 'date']
+    ordering = ['-date']
+    def get_queryset(self):
+        per_page_total_data = self.request.query_params.get("per_page_total_data")
+        if per_page_total_data:
+            self.pagination_class.page_size = per_page_total_data
+        search_query = self.request.query_params.get('search', '')
+        if search_query:
+            queryset=EmailMessageModel.objects.all()
+            filters = Q(header__icontains=search_query) | Q(sender__icontains=search_query) | Q(recipient__icontains=search_query) | Q(body__icontains=search_query) | Q(snippet__icontains=search_query)
+            return queryset.filter(filters)
+        # user = self.request.user
+        query_type = self.request.query_params.get('query_type') or "All Mail"
+        sender=self.request.query_params.get('sender') or ""
+        print("sender",sender)
+        recipient=self.request.query_params.get('recipient') or ""
+
+        print("in else")
+        # filters = Q()
+        if query_type == 'sent':
+            return EmailMessageModel.mailManager.filter_Email(sender=sender,recipient=recipient)
+        elif query_type == 'inbox':
+            return EmailMessageModel.mailManager.filter_Email(sender=sender,recipient=recipient)
+
+            
+    #    / print("filters",filters)
+        # return queryset.filter(filters)
+
+    def list(self, request, *args, **kwargs):
+        queryset = self.get_queryset()
+        page = self.paginate_queryset(queryset)
+        processed_emails = []
+        user_email = request.user.email
+
+        prediction_api_url = 'http://127.0.0.1:8000/model/predict/'
+
+        for email in page:
+            mail_body = email.body or email.header or email.snippet or ""
+            data = {'body': mail_body}
+            json_mail_body = json.dumps(data)
+
+            try:
+                response = requests.post(prediction_api_url, data=json_mail_body, headers={'Content-Type': 'application/json'}, timeout=20)
+                
+                if response.status_code == 200:
+                    prediction_result = response.json()
+                    is_mail_spam = prediction_result.get('is_spam', False)
+                else:
+                    is_mail_spam = False
+                    return Response("Error: Body or header required", status=status.HTTP_400_BAD_REQUEST)
+                
+                email.spam = is_mail_spam
+                email.save(update_fields=['spam'])
+
+                processed_data = {
+                    'id': email.id,
+                    'message_id': email.message_id,
+                    'header': email.header,
+                    'body': email.body,
+                    'date': email.date,
+                    'sender': email.sender,
+                    'recipient': email.recipient,
+                    'snippet': email.snippet,
+                    'spam': is_mail_spam,
+                    'is_archived': email.is_archived,
+                    'is_deleted': email.is_deleted,
+                    'user_email': user_email
+                }
+                processed_emails.append(processed_data)
+            except requests.exceptions.RequestException as e:
+                return Response(f"RequestException: {e}", status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            except Exception as e:
+                return Response(f"Error: {e}", status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+        return self.get_paginated_response(processed_emails)
+class MailFromDb(generics.ListCreateAPIView):  
 
     serializer_class = EmailSerializer
     permission_classes = [IsAuthenticated]
     pagination_class = pagination.PageNumberPagination
     pagination_class.page_size = 10
     filter_backends = [SearchFilter, OrderingFilter]
-    search_fields = ['header', 'sender', 'recipient']
+    search_fields = ['header', 'sender', 'recipient',"body"]
     ordering_fields = ['id', 'header', 'sender', 'recipient', 'date']
     ordering = ['-date']
 

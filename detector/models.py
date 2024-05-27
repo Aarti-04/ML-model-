@@ -1,7 +1,7 @@
 from django.db import models
 from django.contrib.auth.models import AbstractUser
 from django.utils.translation import gettext_lazy as _
-from .managers import CustomUserManager,TokenManager
+from .managers import CustomUserManager,TokenManager,EmailManager
 from django.conf import settings
 from django.utils import timezone
 import uuid
@@ -43,10 +43,11 @@ class EmailMessageModel(models.Model):
     created_at = models.DateTimeField(auto_now_add=True,null=True) 
     updated_at = models.DateTimeField(auto_now=True,null=True)      
     objects=models.Manager()
+    mailManager=EmailManager()
     
     class Meta:
         indexes = [
-            models.Index(fields=['userid']),
+            # models.Index(fields=['userid']),
             models.Index(fields=['date']),
         ]
 
