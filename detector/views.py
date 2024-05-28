@@ -257,7 +257,8 @@ class MailSearchFilter(generics.ListCreateAPIView):
         per_page_total_data = self.request.query_params.get("per_page_total_data")
         if per_page_total_data:
             self.pagination_class.page_size = per_page_total_data
-        search_query = self.request.query_params.get('search', '')
+        search_query = self.request.query_params.get('search', '') or ""
+        print("search query",search_query)
         if search_query:
             queryset=EmailMessageModel.objects.all()
             filters = Q(header__icontains=search_query) | Q(sender__icontains=search_query) | Q(recipient__icontains=search_query) | Q(body__icontains=search_query) | Q(snippet__icontains=search_query)
@@ -267,9 +268,7 @@ class MailSearchFilter(generics.ListCreateAPIView):
         sender=self.request.query_params.get('sender') or ""
         print("sender",sender)
         recipient=self.request.query_params.get('recipient') or ""
-
         print("in else")
-        # filters = Q()
         if query_type == 'sent':
             return EmailMessageModel.mailManager.filter_Email(sender=sender,recipient=recipient)
         elif query_type == 'inbox':

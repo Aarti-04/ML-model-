@@ -41,7 +41,7 @@ class TokenManager(models.Manager):
         user_credentials=self.model(jwt_access_token=access_token)
         return user_credentials.save()
 class EmailManager(models.Manager):
-    def filter_Email(self,sender="",recipient="",orderby=""):
+    def filter_Email(self,sender="",recipient="",orderby="date"):
         return super().get_queryset().filter(Q(recipient__icontains=recipient)&Q(sender__icontains=sender)&Q(is_deleted=False)&Q(is_archived=False)&Q(spam=False)).order_by(orderby).all()
 
 
