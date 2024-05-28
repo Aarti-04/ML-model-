@@ -58,7 +58,7 @@ MIDDLEWARE = [
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "detector.middleware.ComposeMail_Request_ValidationMiddleware",
-    "detector.middleware.Predict_Email_Request_validationMiddleware"
+    # "detector.middleware.Predict_Email_Request_validationMiddleware"
     # "channels.middleware.AsgiMiddleware",
     # "channels.asgi.AsgiMiddleware",
     # "detector.middleware.TokenValidationMiddleware"

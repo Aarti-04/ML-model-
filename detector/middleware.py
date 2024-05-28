@@ -56,30 +56,7 @@ import json
 from django.http import HttpResponse
 from .exceptions import ValidationError
 from rest_framework.views import status
-class Predict_Email_Request_validationMiddleware:
-    def __init__(self, get_response):
-        self.get_response = get_response
-    def __call__(self, request):
-        print("middlware called")
-        if request.path == '/model/predict/' and request.method == 'POST':
-            print("on path /model/predict/ ")
-            data = request.body.decode("utf-8")
-            data=json.loads(data)
-            # print("data",data)
-            Email_body = data.get('body')
-            if not Email_body:
-                print("error returned from middleware")
-                # return HttpResponse({'error': 'sender_email, header, and body are required.'})
-                # response=HttpResponse(json.dumps({'error': 'email body is required.'}), content_type="application/json")
-                # response.status_code=status.HTTP_400_BAD_REQUEST
-                response = JsonResponse({'error': 'Please add header or body '},status=status.HTTP_400_BAD_REQUEST)
-                return response
-               
-                # raise ValidationError('sender_email, header, and body are required.') 
-                
-        response = self.get_response(request)
-        # print("response", response)
-        return response
+
            
         
 class ComposeMail_Request_ValidationMiddleware:

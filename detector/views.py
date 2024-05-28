@@ -349,7 +349,7 @@ class MailFromDb(generics.ListCreateAPIView):
             'is_archived': False,
             'is_deleted': False
         }
-
+        print("query_type",query_type)
         if query_type == 'sent':
             filters['sender'] = user
         elif query_type == 'inbox':
