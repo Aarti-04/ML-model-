@@ -41,4 +41,6 @@ def send_login_email(sender, request, user, **kwargs):
         # logger.info("Login email sent successfully.")
     except Exception as e:
         logger.error("Error sending login email: %s", e)
+# @receiver("resetPassword")
+# def send_reset_password()
 

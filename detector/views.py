@@ -221,9 +221,11 @@ class GoogleLoginView(APIView):
         data=request.body
         data=data.decode('utf-8')
         login_data=json.loads(data)
+        print(login_data)
         try:
             authenticatedUser=authenticate(request,email=login_data["email"],password=login_data["password"])
             if(authenticatedUser):
+                
                 User_Token_cred=TokenModel.objects.get(userid=authenticatedUser)
                 if(User_Token_cred):
                     # google_access_token=User_Token_cred.google_access_token
@@ -244,13 +246,27 @@ class GoogleLoginView(APIView):
     #                   
                         # return Response(f"hello{google_access_token}")
                     else:
-                        return Response("Error while fetching accesstoken")
+                        return Response("Error while fetching accesstoken",status=status.HTTP_500_INTERNAL_SERVER_ERROR)
             else:
                 print("in else")
+                return Response("Invalid email or password",status=status.HTTP_404_NOT_FOUND)
         except Exception as e:
             print(str(e))
             return Response(f"${str(e)}")
-        
+class ResetPassword(APIView):
+    def post(self,request):
+        email=request.data.get("email")
+        new_password=request.data.get("password")
+        CustomUserObj=CustomUser.objects.filter(email=email).first()
+        if CustomUser.objects.filter(email=email).exists():
+            CustomUserObj.set_password(new_password)
+            CustomUserObj.save()
+            return Response("password reset successfully")
+        else:
+            return Response("user not exist")
+
+
+
 class TokenRefresh(TokenRefreshView):
     def post(self, request, *args, **kwargs):
         print("called")

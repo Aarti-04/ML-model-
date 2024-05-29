@@ -167,7 +167,7 @@ class MyConsumer(AsyncWebsocketConsumer):
             while True:
                 await self.read_and_insert_mail(access_token)
                 # print("Record inserted")
-                await asyncio.sleep(60)  # Wait for 1 minute before repeating
+                # await asyncio.sleep(60)  # Wait for 1 minute before repeating
         except asyncio.CancelledError:
             print("start_reading_mail cancelled")
             
