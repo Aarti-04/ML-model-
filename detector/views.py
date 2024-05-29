@@ -89,6 +89,7 @@ from sklearn import svm
 import numpy as np
 from django.conf import settings
 from django.db.models import Q
+from .utils import saveCredentials,get_user_info_from_google,get_google_access_token
 
 load_dotenv()
 
@@ -105,9 +106,9 @@ class LoginUser(APIView):
 class Logout(APIView):
     parser_classes=[IsAuthenticated]
     def delete(self,request):
-        # user=request.user
-        # print(user)
-        # logout(request)
+        user=request.user
+        print(user)
+        logout(request)
         return Response("logout")
         # user, created =CustomUser.objects.get(email=user_email)
 def get_auth_jwt_token(authenticatedUser):
@@ -117,43 +118,45 @@ def get_auth_jwt_token(authenticatedUser):
         return token
 class GoogleRegisterView(APIView):
     
-    def generate_random_password(self,email):
-        random_string = ''.join(random.choices(string.ascii_letters + string.digits, k=8))
-        password_base = email.split('@')[0] + random_string
-        return password_base
-    def saveCredentials(self,user_email="", google_access_token="",google_refresh_token="",jwt_refresh_token=""):
-        user, created =CustomUser.objects.get_or_create(email=user_email)
+    # def generate_random_password(self,email):
+    #     random_string = ''.join(random.choices(string.ascii_letters + string.digits, k=8))
+    #     password_base = email.split('@')[0] + random_string
+    #     return password_base
+    # def saveCredentials(self,user_email="", google_access_token="",google_refresh_token="",jwt_refresh_token=""):
+    #     user, created =CustomUser.objects.get_or_create(email=user_email)
         
-        # Get or create a TokenModel instance for the user
-        token_obj, _ = TokenModel.objects.get_or_create(userid=user)
+    #     # Get or create a TokenModel instance for the user
+    #     token_obj, _ = TokenModel.objects.get_or_create(userid=user)
         
-        # Update the TokenModel instance with the access and refresh tokens
-        token_obj.jwt_refresh_token=jwt_refresh_token
-        token_obj.google_access_token=google_access_token
-        token_obj.google_refresh_token = google_refresh_token
-        print("token object",token_obj)
-        token_obj.save()
+    #     # Update the TokenModel instance with the access and refresh tokens
+    #     token_obj.jwt_refresh_token=jwt_refresh_token
+    #     token_obj.google_access_token=google_access_token
+    #     token_obj.google_refresh_token = google_refresh_token
+    #     print("token object",token_obj)
+    #     token_obj.save()
     def post(self,request):
         authorization_code=request.body
         print("authorization_code",authorization_code)
         data_string = authorization_code.decode('utf-8')
         token_info = json.loads(data_string)
-        google_access_token = token_info.get('access_token')
-        google_refresh_token = token_info.get('refresh_token')  # Optional, depending on the scope
-        user_info_url = f"https://www.googleapis.com/oauth2/v1/userinfo?access_token={google_access_token}"
-        user_info_response = requests.get(user_info_url)
-        if user_info_response.status_code == 200:
-            user_info = user_info_response.json()
-            print(user_info)
-            # user_password=self.generate_random_password(user_info["email"])
-            user={"email":user_info["email"],"name":user_info["name"]}
+        # google_access_token = token_info.get('access_token')
+        # google_refresh_token = token_info.get('refresh_token')  # Optional, depending on the scope
+        # user_info_url = f"https://www.googleapis.com/oauth2/v1/userinfo?access_token={google_access_token}"
+        # user_info_response = requests.get(user_info_url)
+        # if user_info_response.status_code == 200:
+        #     user_info = user_info_response.json()
+        #     print(user_info)
+        #     # user_password=self.generate_random_password(user_info["email"])
+        #     user={"email":user_info["email"],"name":user_info["name"]}
+        user=get_user_info_from_google(token_info)
+        if(user):
             try:
                 user_serializer=CustomeUserSerializer(data=user)
                 user_serializer.is_valid(raise_exception=True)
                 authenticatedUser=user_serializer.save()
                 print("obj",authenticatedUser)
                 jwt_token=get_auth_jwt_token(authenticatedUser)
-                self.saveCredentials(user["email"],google_access_token=google_access_token,google_refresh_token=google_refresh_token,jwt_refresh_token=jwt_token["refresh_token"])
+                saveCredentials(user["email"],google_access_token=google_access_token,google_refresh_token=google_refresh_token,jwt_refresh_token=jwt_token["refresh_token"])
                 login(request,authenticatedUser)
 
                 print("logged in user",authenticatedUser)
@@ -181,6 +184,37 @@ class GoogleRegisterView(APIView):
                 return Response(f"Error {str(e)}",status=status.HTTP_400_BAD_REQUEST)
         else:
             return Response({'error': 'Failed to fetch user info from Google'}, status=status.HTTP_400_BAD_REQUEST)
+# class GoogleLoginView(APIView):
+#     def post(self,request):
+#         try:
+#             authorization_code=request.body
+#             print("authorization_code",authorization_code)
+#             data_string = authorization_code.decode('utf-8')
+#             token_info = json.loads(data_string)
+#             user=get_user_info_from_google(token_info)
+#             if(user):
+#                 google_access_token = token_info.get('access_token')
+#                 google_refresh_token = token_info.get('refresh_token')
+#                 authenticatedUser=CustomUser.objects.get(email=user["email"])
+#                 User_Token_cred=TokenModel.objects.get(userid=authenticatedUser)
+#                 User_Token_cred.google_access_token=google_access_token
+#                 User_Token_cred.google_refresh_token=google_refresh_token
+#                 jwt_refresh_token=User_Token_cred.jwt_refresh_token
+#                 access_token_response=customRequest.post("http://127.0.0.1:8000/api/refreshtoken/",data=jwt_refresh_token,timeout=20)
+#                 jwt_access_token=access_token_response.json()
+#                 print("jwt_access_token",jwt_access_token)
+#                 print("jwt_refresh_token",jwt_refresh_token)
+#                 res=User_Token_cred.save()
+#                 print(res)
+#                 login(request,authenticatedUser)
+#                 user_logged_in.send(sender=CustomUser,request=request,user=authenticatedUser)
+#                 return Response({"message":"User Logged in successfully","access_token":jwt_access_token["access_token"],"refresh_token":jwt_refresh_token},status.HTTP_200_OK)
+#             else:
+#                 return Response({'error': 'Failed to fetch user info from Google'}, status=status.HTTP_400)
+#         except Exception as e:
+#             return Response(f"Error {str(e)}",status=status.HTTP_400_BAD_REQUEST)
+            
+            
 class GoogleLoginView(APIView):
     def post(self, request):
         # access_token = request.data.get('access_token')
@@ -188,32 +222,34 @@ class GoogleLoginView(APIView):
         data=data.decode('utf-8')
         login_data=json.loads(data)
         try:
-            authenticate_user=authenticate(request,email=login_data["email"],password=login_data["password"])
-            if(authenticate_user):
-                User_Token_cred=TokenModel.objects.get(userid=authenticate_user)
+            authenticatedUser=authenticate(request,email=login_data["email"],password=login_data["password"])
+            if(authenticatedUser):
+                User_Token_cred=TokenModel.objects.get(userid=authenticatedUser)
                 if(User_Token_cred):
-                    google_access_token=User_Token_cred.google_access_token
-                    jwt_refresh_token=User_Token_cred.jwt_refresh_token
-
-                    user_info_url = f"https://www.googleapis.com/oauth2/v1/userinfo?access_token={google_access_token}"
-                    user_info_response = requests.get(user_info_url)
-                    print("user_info_response",user_info_response.text)
-                    if user_info_response.status_code == 200:
-                        access_token_response=customRequest.post("http://127.0.0.1:8000/api/refreshtoken/",data=jwt_refresh_token)
-                        access_token=access_token_response.json()
-                        login(request,authenticate_user)
-                        print("response access_token",access_token)
-                        return Response({"message":"Login successfully","access_token":access_token["access_token"],"refresh_token":jwt_refresh_token}, status=status.HTTP_200_OK)
+                    # google_access_token=User_Token_cred.google_access_token
+                    google_refresh_token=User_Token_cred.google_refresh_token
+                    google_access_token=get_google_access_token(google_refresh_token)
+                    if(google_access_token):
+                        User_Token_cred.google_access_token=google_access_token
+                        jwt_refresh_token=User_Token_cred.jwt_refresh_token
+                        access_token_response=customRequest.post("http://127.0.0.1:8000/api/refreshtoken/",data=jwt_refresh_token,timeout=20)
+                        jwt_access_token=access_token_response.json()
+    #                   print("jwt_access_token",jwt_access_token)
+                        print("jwt_refresh_token",jwt_refresh_token)
+                        res=User_Token_cred.save()
+    #                   print(res)
+                        login(request,authenticatedUser)
+                        user_logged_in.send(sender=CustomUser,request=request,user=authenticatedUser)
+                        return Response({"message":"User Logged in successfully","access_token":jwt_access_token["access_token"],"refresh_token":jwt_refresh_token},status.HTTP_200_OK)
+    #                   
+                        # return Response(f"hello{google_access_token}")
                     else:
-                        return Response({'error': 'Failed to fetch user info from Google'}, status=status.HTTP_400_BAD_REQUEST)
-                else:
-                    return Response("Please login with google")
+                        return Response("Error while fetching accesstoken")
             else:
-                print("user not found")
-                return Response("user not found")
+                print("in else")
         except Exception as e:
             print(str(e))
-            return Response(f"Error ${str(e)}")
+            return Response(f"${str(e)}")
         
 class TokenRefresh(TokenRefreshView):
     def post(self, request, *args, **kwargs):
@@ -568,9 +604,9 @@ class MailRead(APIView):
             # elif part.get('mimeType') in ('multipart/mixed', 'multipart/alternative'):
                 # body += self.get_body_content(part.get('parts', []))
         return body
-    async def fetch_emails(self, service, query,max_results=10):
+    def fetch_emails(self, service, query,max_results=10):
         try:
-            response = await service.users().messages().list(userId='me', q=query,maxResults=max_results).execute()
+            response =  service.users().messages().list(userId='me', q=query,maxResults=max_results).execute()
             # result_size_estimate = response.get('resultSizeEstimate', 0)
             messages = response.get('messages', [])
             results = []
