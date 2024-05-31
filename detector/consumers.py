@@ -146,6 +146,10 @@ class MyConsumer(AsyncWebsocketConsumer):
         query_params = self.scope["query_string"].decode()
         parsed_query_params = parse_qs(query_params)
         access_token = parsed_query_params.get("access_token", [None])[0]
+        if access_token is None:
+            print("Access token is missing, closing connection.")
+            await self.close()
+            return
         print("called start_reading_mail")
         self.reading_mail_task = asyncio.create_task(self.start_reading_mail(access_token))
 
@@ -169,6 +173,9 @@ class MyConsumer(AsyncWebsocketConsumer):
                 # print("Record inserted")
                 # await asyncio.sleep(60)  # Wait for 1 minute before repeating
         except asyncio.CancelledError:
+            await self.close()
+            return
+            
             print("start_reading_mail cancelled")
             
     async def read_and_insert_mail(self,access_token):

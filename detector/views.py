@@ -654,6 +654,75 @@ class MailRead(APIView):
         except HttpError as e:
             print(f"Error fetching emails: {e}")
             return [],0
+        # try:
+        #     user_object = CustomUser.objects.get(email=user_token_cred.userid)
+        #     if user_object.is_first_login:
+        #         max_results = 50
+        #         setattr(user_object, "is_first_login", False)
+        #         user_object.save()
+        #     else:
+        #         max_results = 10
+        #     print("max_results", max_results)
+        #     response = service.users().messages().list(userId='me', q=query, maxResults=max_results).execute()
+        #     messages = response.get('messages', [])
+        #     if messages:
+        #         print("messages found")
+        #     else:
+        #         print("No messages found.")
+        #     results = []
+        #     for message in messages[:max_results]:
+        #         user_id = user_object.id
+        #         msg_id = message['id']
+        #         full_message = service.users().messages().get(userId='me', id=msg_id).execute()
+        #         payload = full_message['payload']
+        #         headers = payload['headers']
+        #         snippet = full_message["snippet"]
+        #         sender = next((header['value'] for header in headers if header['name'] == 'From'), None)
+        #         to = next((header['value'] for header in headers if header['name'] == 'To'), None)
+        #         subject = next((header['value'] for header in headers if header['name'] == 'Subject'), None)
+        #         date = next((header['value'] for header in headers if header['name'] == 'Date'), None)
+
+        #         # Extract the body
+        #         body = self.get_body_content(payload['body'])
+        #         if not body:
+        #             parts = payload.get('parts', [])
+        #             body = self.get_body_content1(parts)
+
+        #         if not body:
+        #             print("still data not found")
+
+        #         # Extract attachments
+        #         attachments = []
+        #         parts = payload.get('parts', [])
+        #         for part in parts:
+        #             if part['filename']:
+        #                 attachment_id = part['body']['attachmentId']
+        #                 attachment = service.users().messages().attachments().get(userId='me', messageId=msg_id, id=attachment_id).execute()
+        #                 file_data = base64.urlsafe_b64decode(attachment['data'].encode('UTF-8'))
+        #                 attachments.append({
+        #                     'filename': part['filename'],
+        #                     'mimeType': part['mimeType'],
+        #                     'data': file_data
+        #                 })
+
+        #         results.append({
+        #             'snippet': snippet,
+        #             'message_id': msg_id,
+        #             'header': subject,
+        #             "body": body,
+        #             "date": date,
+        #             'sender': sender,
+        #             "recipient": to,
+        #             "spam": False,
+        #             "userid": user_id,
+        #             "attachments": attachments
+        #         })
+
+        #     return results
+        # except Exception as e:
+        #     print(f"An error occurred: {e}")
+        #     return []
+
     def get(self, request):
             # user_email=request.user
             # lable_query = request.GET.get("querylable")
