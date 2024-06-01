@@ -318,13 +318,20 @@ class MailSearchFilter(generics.ListCreateAPIView):
         # user = self.request.user
         query_type = self.request.query_params.get('query_type') or "All Mail"
         sender=self.request.query_params.get('sender') or ""
-        print("sender",sender)
+        print("query_type",query_type)
         recipient=self.request.query_params.get('recipient') or ""
-        print("in else")
-        if query_type == 'sent':
-            return EmailMessageModel.mailManager.filter_Email(sender=sender,recipient=recipient)
-        elif query_type == 'inbox':
-            return EmailMessageModel.mailManager.filter_Email(sender=sender,recipient=recipient)
+        print("sender",sender)
+        print("recipient",recipient)
+        
+        # if query_type == 'sent':
+        print(EmailMessageModel.mailManager.filter_Email(sender=sender,recipient=recipient))
+            # return EmailMessageModel.mailManager.filter_Email(sender=sender,recipient=recipient)
+        # elif query_type == 'inbox':
+            # print(EmailMessageModel.mailManager.filter_Email(sender=sender,recipient=recipient))
+        return EmailMessageModel.mailManager.filter_Email(sender=sender,recipient=recipient)
+        # else:
+            # return EmailMessageModel.objects.all()
+
 
             
     #    / print("filters",filters)
