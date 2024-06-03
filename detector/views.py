@@ -241,7 +241,7 @@ class GoogleLoginView(APIView):
                         res=User_Token_cred.save()
     #                   print(res)
                         login(request,authenticatedUser)
-                        user_logged_in.send(sender=CustomUser,request=request,user=authenticatedUser)
+                        # user_logged_in.send(sender=CustomUser,request=request,user=authenticatedUser)
                         return Response({"message":"User Logged in successfully","access_token":jwt_access_token["access_token"],"refresh_token":jwt_refresh_token},status.HTTP_200_OK)
     #                   
                         # return Response(f"hello{google_access_token}")

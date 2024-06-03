@@ -22,6 +22,6 @@ def preprocess_email_body(body):
     # Optionally, further clean the text (e.g., remove special characters)
     body = re.sub(r'\s+', ' ', body)  # Replace multiple spaces with a single space
     body = re.sub(r'[^a-zA-Z0-9\s]', '', body)  # Remove non-alphanumeric characters
-    print("Processed html bodys",body)
+    # print("Processed html bodys",body)
     # return text
     return body

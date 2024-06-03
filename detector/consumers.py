@@ -172,11 +172,16 @@ class MyConsumer(AsyncWebsocketConsumer):
                 await self.read_and_insert_mail(access_token)
                 # print("Record inserted")
                 # await asyncio.sleep(60)  # Wait for 1 minute before repeating
+                
         except asyncio.CancelledError:
             await self.close()
             return
+        except Exception as e:
+            await self.close()
+            return
             
-            print("start_reading_mail cancelled")
+            
+        print("start_reading_mail cancelled")
             
     async def read_and_insert_mail(self,access_token):
         try:
@@ -206,6 +211,10 @@ class MyConsumer(AsyncWebsocketConsumer):
 
         except Exception as e:
             print(f"Error reading and inserting mail: {e}")
+            await self.close()
+            return
+            
+            
 
     @sync_to_async
     def get_user_credentials(self,access_token):
